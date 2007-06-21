@@ -1,0 +1,70 @@
+#!/usr/bin/perl
+#
+# Nagios plugin wrapper to add additional per-host args to check commands
+# 
+# NB: This is experimental, semi-abandoned, and largely untested - use at your own risk!!
+#
+
+use strict;
+use Config::Tiny;
+use Getopt::Std;
+use File::Basename;
+use Nagios::Plugin 0.03;
+
+my %opts = ();
+getopts('c:v', \%opts);
+my $config = $opts{c} || '/etc/nagios/hostwrapper.cfg';
+my $verbose = $opts{v};
+
+my $plugin = shift @ARGV;
+my @args = @ARGV;
+
+# Sanity-check plugin
+nagios_exit("UNKNOWN", "cannot find plugin '$plugin'") unless -f $plugin;
+nagios_exit("UNKNOWN", "plugin '$plugin' is not executable") unless -x $plugin;
+
+sub printv { print join ' ', @_ if $verbose }
+
+printv "plugin $plugin\n";
+printv "args " . scalar(@args) . "\n";
+
+{
+  # Read config
+  last unless -r $config;
+  my $hw = Config::Tiny->read($config);
+  last unless defined $hw;
+
+  # Identify host
+  my $host = '';
+  my $host_index = -1;
+  my $host_args = 0;
+  for (my $i = 0; $i <= $#args; $i++) {
+    my $arg = $args[$i];
+    # For now, assume host is always -H
+    next unless substr($arg,0,2) eq '-H';
+    $host_index = $i;
+    if (length $arg == 2) {
+      $host = $args[$i+1];
+      $host_args = 2;
+    }
+    else {
+      $host = substr($arg,2);
+      $host_args = 1;
+    }
+    $host =~ s/^\s+//;
+    printv "host $host\n";
+    last;
+  }
+  # Remove host args from @args
+  splice @args, $host_index, $host_args;
+}
+
+# Exec the plugin
+exec($plugin, @args);
+
+
+
+# arch-tag: 97965f3a-3d03-48f5-93ea-c7915fcd2174
+
+__END__
+

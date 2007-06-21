@@ -1,0 +1,173 @@
+#!/usr/bin/perl -w
+#
+# check_inodes - plugin to check inode usage across all partitions.
+#   Designed to be a workalike for check_disk.
+#
+
+use strict;
+use File::Basename;
+use Nagios::Plugin::Getopt;
+use Nagios::Plugin 0.1301;
+
+my $ng = Nagios::Plugin::Getopt->new(
+  usage => qq(Usage: %s -w limit -c limit [-p path | [-x device] [-X type]]
+                 [-t timeout] [-l] [-u] [-v]),
+  version => '0.04',
+  url => 'http://www.openfusion.com.au/labs/nagios/',
+  blurb => qq(This plugin checks inode usage on mounted partitions.),
+);
+
+$ng->arg(
+  spec => "warning|w=s",
+  help => q(-w, --warning=INTEGER
+   Exit with WARNING status if less than INTEGER inodes are free
+     (or more than INTEGER inodes are used, with -u)
+ -w, --warning=PERCENT%
+   Exit with WARNING status if less than PERCENT of inodes is free
+     (or more than PERCENT inodes are used, with -u)), 
+  required => 1);
+$ng->arg(
+  spec => "critical|c=s",
+  help => q(-c, --critical=INTEGER
+   Exit with CRITICAL status if less than INTEGER inodes are free
+     (or more than INTEGER inodes are used, with -u)
+ -c, --critical=PERCENT%
+   Exit with CRITICAL status if less than PERCENT of inodes is free
+     (or more than PERCENT inodes are used, with -u)), 
+  required => 1);
+$ng->arg(
+  spec => "local|l",
+  help => q(-l, --local
+   Only check local filesystems));
+$ng->arg(
+  spec => "path|partition|p=s@",
+  help => q(-p, --path=PATH, --partition=PARTITION
+   Path or partition (may be repeated)));
+$ng->arg(
+  spec => "exclude-device|x=s@",
+  help => q(-x, --exclude_device=PATH <STRING>
+   Ignore device (may be repeated; only works if -p unspecified)));
+$ng->arg(
+  spec => "exclude-type|X=s@",
+  help => q(-X, --exclude-type=TYPE <STRING>
+   Ignore all filesystems of indicated type (may be repeated; only works 
+     if -p unspecified)));
+$ng->arg(
+  spec => "report-usage|u",
+  help => q(-u, --report-usage
+   Report usage statistics, rather than free statistics));
+$ng->arg(
+  spec => "errors-only|e",
+  help => q(-e, --errors-only
+   Display only devices/mountpoints with errors));
+
+$ng->getopts;
+
+my $np = Nagios::Plugin->new;
+
+my $DF = '/bin/df';
+my $DF_ARGS = '-i -T';
+
+$np->nagios_exit("UNKNOWN", "cannot find $DF") unless -f $DF && -x $DF;
+
+# Do the df
+$DF_ARGS .= " -l" if $ng->local;
+alarm($ng->timeout);
+$np->nagios_exit("UNKNOWN", "No output from '$DF $DF_ARGS'") 
+  unless open DF, "$DF $DF_ARGS |";
+my @lines = <DF>;
+close DF;
+
+# Parse the output
+shift @lines;
+my @part = ();
+my $join = '';
+for (@lines) {
+  my %entry = ();
+  # df can split entries over 2 lines - if $join is set, we need to add it in
+  if ($join) {
+    $_ = "$join $_";
+    $join = '';
+  }
+  @entry{qw(fs type inodes iused ifree ipct mountpoint)} = split /\s+/;
+  # If type is empty, then line must be split - save fs to $join and continue
+  if (! $entry{type}) {
+    $join = $entry{fs};
+    next;
+  }
+  $entry{ipct} = substr($entry{ipct},0,-1) if substr($entry{ipct},-1) eq '%';
+  $entry{ipct_free} = $entry{ipct} =~ m/^\d+$/ ? 100 - $entry{ipct} : 100;
+  push @part, \%entry;
+}
+
+# Check partitions for warnings/criticals
+my @critical = ();
+my @warning = ();
+my $results = $ng->get('report-usage') ? 'inodes used: ' : 'free inodes: ';
+my $critical_pct = 0;
+my $critical = $ng->critical;
+my $warning_pct = 0;
+my $warning = $ng->warning;
+if (substr($critical,-1) eq '%') {
+  $critical = substr($critical,0,-1);
+  $critical_pct = 1;
+}
+if (substr($warning,-1) eq '%') {
+  $warning = substr($warning,0,-1);
+  $warning_pct = 1;
+}
+for my $part (@part) {
+  # Check specific inclusions/exclusions
+  my $path = $ng->path || [];
+  my $exclude_device = $ng->get('exclude-device') || [];
+  my $exclude_type = $ng->get('exclude-type') || [];
+  if (@$path) {
+    next unless grep { $_ eq $part->{fs} || $_ eq $part->{mountpoint} } @$path;
+  }
+  elsif (@$exclude_device || @$exclude_type) {
+    next if grep { $_ eq $part->{fs} || $_ eq $part->{mountpoint} } @$exclude_device;
+    next if grep { $_ eq $part->{type} } @$exclude_type;
+  }
+
+  # Classify for each partition
+  my ($critical_actual, $warning_actual, $message);
+  if ($ng->get('report-usage')) {
+    $critical_actual = $critical_pct ? $part->{ipct} : $part->{iused};
+    $warning_actual  = $warning_pct ? $part->{ipct} : $part->{iused};
+    $message = sprintf "%s %d (%s)", 
+      $part->{mountpoint}, $part->{iused}, $part->{ipct} . '%';
+    if ($critical_actual >= $critical) {
+        $np->add_message(CRITICAL, $message);
+    }
+    elsif ($warning_actual >= $warning) {
+        $np->add_message(WARNING, $message);
+    }
+    else {
+        $np->add_message(OK, $message);
+    }
+  }
+  else {
+    $critical_actual = $critical_pct ? $part->{ipct_free} : $part->{ifree};
+    $warning_actual  = $warning_pct ? $part->{ipct_free} : $part->{ifree};
+    $message = sprintf "%s %d (%s)", 
+      $part->{mountpoint}, $part->{ifree}, $part->{ipct_free} . '%';
+    if ($critical_actual <= $critical) {
+        $np->add_message(CRITICAL, $message);
+    }
+    elsif ($warning_actual <= $warning) {
+        $np->add_message(WARNING, $message);
+    }
+    else {
+        $np->add_message(OK, $message);
+    }
+  }
+}
+
+my $delim = '; ';
+my @join_all = $ng->get('errors-only') ? () : (join_all => $delim);
+my ($code, $message) = $np->check_messages('join' => $delim, @join_all);
+my $state = $ng->get('report-usage') ? 'used' : 'free';
+$np->nagios_exit($code, "inodes $state: $message");
+
+# arch-tag: 30fdd013-3ef1-4c12-a35b-849e83e125fd
+# vim:ft=perl

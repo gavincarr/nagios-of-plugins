@@ -1,0 +1,2 @@
+#!/bin/sh
+sed -e 's/;[^ ]*//g' -e 's/\([0-9]*\)=/_\1min:/g' /var/log/nagios/perf/$1/LOAD

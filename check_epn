@@ -1,0 +1,29 @@
+#!/usr/bin/perl -w
+#
+# Trivial nagios plugin to help with ePN debugging
+#
+
+use strict;
+use File::Basename;
+use Nagios::Plugin::Getopt;
+
+my $ng = Nagios::Plugin::Getopt->new(
+  usage => qq(Usage: %s [-v]\n),
+  version => '0.1',
+  url => 'http://www.openfusion.com.au/labs/nagios/',
+  blurb => qq(Trivial nagios plugin to help with nagios ePN testing.),
+);
+$ng->getopts;
+
+if (! $ENV{NAGIOS_PLUGIN} || $ENV{NAGIOS_PLUGIN} =~ m/p1\.pl$/) {
+  print "CRITICAL - $ENV{NAGIOS_PLUGIN}\n";
+  exit 1;
+} else {
+  print "OK - $ENV{NAGIOS_PLUGIN}\n";
+  exit 0;
+}
+
+
+# arch-tag: 0e222b37-e20a-4384-9232-6c7f90f34f09
+# vim:ft=perl:ai:sw=2
+

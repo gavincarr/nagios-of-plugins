@@ -1,0 +1,42 @@
+#!/usr/bin/perl
+#
+# Parse perfdata from the check_nt plugin, returning first and last fields
+#
+# Example: 5 min avg Load=4%;90;95;0;100 15 min avg Load=4%;90;95;0;100
+#
+
+use strict;
+use IO::File;
+use Getopt::Std;
+use File::Basename;
+
+my %opts = ();
+getopts('b:h', \%opts);
+my $base = $opts{b};
+my $help = $opts{h};
+
+if ($help) {
+  print "usage: " . basename($0) . " <host> <file>\n";
+  exit 1;
+}
+
+my $host = shift @ARGV;
+my $file = shift @ARGV;
+
+my $fh = IO::File->new("/var/log/nagios/perf/$host/$file", "r");
+my $label = lc $file;
+if (defined $fh) {
+  my $pref = <$fh>;
+  if ($pref =~ m/.*?=(\S+)\s*/g) {
+    my $data = $1;
+    my @data = split /;/, $data;
+    my $first = $data[0];
+    my $last = $data[$#data];
+    $first =~ s/\D+\s*$//;
+    $last =~ s/\D+\s*$//;
+    $first /= $base if $base;
+    $last /= $base if $base;
+    print "${label}_usage:$first ${label}_total:$last\n";
+  }
+}
+

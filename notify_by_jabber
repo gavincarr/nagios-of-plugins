@@ -1,0 +1,71 @@
+#!/usr/bin/perl
+#
+# notify_by_jabber - utility to send nagios alerts using Jabber
+#
+#   Author: Gavin Carr <gavin@openfusion.com.au>
+#   Based on version by David Cox, June 2002
+#
+
+use strict;
+use Net::Jabber qw(Client) ;
+use Net::Jabber qw(Message) ;
+use Net::Jabber qw(Protocol) ;
+use Net::Jabber qw(Presence) ;
+use File::Basename;
+use Config::Tiny;
+
+# Requires config in /etc/nagios/plugins.cfg with server/username/password details
+#   (either at top level as var1=value parameters, or in [notify_by_jabber] section)
+my $CONFIG_FILE = "/etc/nagios/plugins.cfg";
+die "cannot find config file '$CONFIG_FILE" unless -e $CONFIG_FILE;
+
+my $me = basename($0);
+
+if (! @ARGV) {
+  print "usage: $me <jabberids> <msg>\n";
+  exit 0;
+}
+
+my $rcpts = shift @ARGV;
+my @rcpt = split /,/, $rcpts;
+
+my $msg = shift @ARGV;
+unless ($msg) {
+  local $/ = undef;
+  $msg = <>;
+}
+
+my $conf = Config::Tiny->read($CONFIG_FILE);
+die "unable to read config file '$CONFIG_FILE'" unless ref $conf;
+
+my $USER     = $conf->{$me}->{jabber_user}     || $conf->{_}->{jabber_user};
+my $PASS     = $conf->{$me}->{jabber_pass}     || $conf->{_}->{jabber_pass};
+die "required config parameter 'jabber_user' not set" unless $USER;
+die "required config parameter 'jabber_pass' not set" unless $PASS;
+
+my $SERVER   = $conf->{$me}->{jabber_server}   || $conf->{_}->{jabber_server}   || 'jabber.org';
+my $PORT     = $conf->{$me}->{jabber_port}     || $conf->{_}->{jabber_port}     || 5222;
+my $RESOURCE = $conf->{$me}->{jabber_resource} || $conf->{_}->{jabber_resource} || 'nagios';
+
+my $connection = Net::Jabber::Client->new();
+$connection->Connect(hostname => $SERVER, port => $PORT, connectiontype => 'http', tls => 1) 
+  or die "Cannot connect ($!)\n";
+
+my @result = $connection->AuthSend(username => $USER, password => $PASS, resource => $RESOURCE );
+die "Ident/Auth with server failed: $result[0] - $result[1]\n" unless $result[0] eq "ok";
+
+foreach my $r ( @rcpt ) {
+   my $message = Net::Jabber::Message->new();
+   $message->SetMessage( 
+     to           => $r,
+     subject      => "Notification",
+     type         => "chat",
+     body         => $msg);
+   $connection->Send($message);
+   sleep 1;
+}
+
+$connection->Disconnect();
+
+
+# arch-tag: 918b1bf8-1c6c-4949-9619-801cd32eb6cf

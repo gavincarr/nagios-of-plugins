@@ -1,0 +1,97 @@
+#!/usr/bin/perl -w
+#
+# Nagios plugin to run an arbitrary query against a database, and test the 
+#   number of rows returned. By default, it returns CRITICAL if no rows 
+#   are returned, and OK otherwise.
+#
+
+use strict;
+use File::Basename;
+use Nagios::Plugin 0.15;
+use DBI;
+
+my $np = Nagios::Plugin->new(
+  usage =>  qq(Usage: %s [-v] -q <query> [-w <warn-count>] [-c <crit-count>]
+                                 [-d <dsn>] [-u <user>] [-p <pass>]\n),
+  version => '0.05',
+  url => 'http://www.openfusion.com.au/labs/nagios/',
+  blurb => 'Plugin to run an arbitrary query against a db and test no. of rows returned.',
+  extra => qq(Warning and critical rowcount ranges may be either single numbers or ranges.
+Ranges may be specified using the following syntaxes:
+- explicit ranges (colon-separated) e.g. 50:100
+- open-ended ranges (colon-separated) for greater-than-or-equal-to 
+  and less-than-or-equal-to tests e.g. 50:, :100
+It is generally safe to use open-ended ranges for both warning and critical 
+rowcounts - critical rowcounts are checked first.
+
+It is recommended that you set 'dsn', 'user', and 'pass' variables in a 
+section of your plugins.cfg file and load them using --default-opts='section'.
+This provides better security than passing your credentials on the command 
+line.),
+);
+
+$np->add_arg(
+  spec => "query|q=s",
+  help => q(-q, --query
+   Query to run against the database, which should return at least one row.),
+  required => 1);
+$np->add_arg(
+  spec => "warning|w=s",
+  help => qq(-w, --warning=STRING
+   Exit with WARNING status if rowcount is in this range (see below).
+   Default: none.));
+$np->add_arg(
+  spec => "critical|c=s",
+  help => qq(-c, --critical=STRING
+   Exit with CRITICAL status if rowcount is in this range (see below).
+   Default: %s.),
+  default => 0);
+$np->add_arg(
+  spec => "dsn|d=s",
+  help => q(-d, --dsn
+   Database DSN indentifier e.g. dbi:Pg:dbname=foo;host=dbserver, etc.));
+$np->add_arg(
+  spec => "user|u=s",
+  help => q(-u, --user
+   Username to use to login to the database.));
+$np->add_arg(
+  spec => "pass|p=s",
+  help => q(-p, --pass
+   Password to use to login to the database.));
+$np->add_arg(
+  spec => "name|n=s",
+  help => q(-n, --name
+   Name/description to use for query in results message.));
+
+$np->getopts;
+
+# ----------------------------------------------------------------------------
+
+my $dsn = $np->opts->dsn;
+my $user = $np->opts->user;
+my $pass = $np->opts->pass;
+my @bad = ();
+for my $req (qw(dsn user pass)) {
+  push @bad, "missing $req" unless eval "\$$req";
+}
+$np->nagios_die(join ' ', @bad) if @bad;
+
+alarm($np->opts->timeout);
+
+# Execute query
+my $dbh = DBI->connect($dsn, $user, $pass, { RaiseError => 1 })
+  or $np->nagios_exit(CRITICAL, "Database connect failed: " . $DBI::errstr);
+my $res;
+eval { $res = $dbh->selectall_arrayref($np->opts->query) };
+$np->nagios_exit(CRITICAL, "Query failed: " . $dbh->errstr) if $@;
+$dbh->disconnect;
+
+# Query successful - evaluate results
+my $name = $np->opts->name ? $np->opts->name . ' ' : '';
+my $count = scalar(@$res);
+my $status = $np->check_threshold($count);
+$np->nagios_exit($status, "${name}query returned $count rows");
+
+
+# arch-tag: 9031f039-b394-4e28-849e-0c28c815dea0
+# vim:ft=perl:ai:sw=4

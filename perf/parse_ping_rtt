@@ -1,0 +1,2 @@
+#!/bin/sh
+sed -e 's/^rta=//' -e 's/ms;.*//' /var/log/nagios/perf/$1/PING

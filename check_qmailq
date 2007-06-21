@@ -1,0 +1,104 @@
+#!/usr/bin/perl -w
+#
+# check_qmailq - plugin to check the length of qmail mail queue.
+#   Based on check_qmailq.pl, by Benjamin Schmid, Copyright 2000.
+#   
+# This plugin must either be run as root, or you can add the nagios user 
+#   to the 'qmail' group.
+#
+
+use strict;
+use Nagios::Plugin::Getopt;
+use Nagios::Plugin 0.1301;
+
+# Process args
+my $ng = Nagios::Plugin::Getopt->new(
+  usage => qq(Usage: %s -w count -c count [-W pre_count] [-C pre_count]
+    [-q /path/to/qmail-qstat]\n),
+  version => '0.01',
+  url => 'http://www.openfusion.com.au/labs/nagios/',
+  blurb => qq(This plugin checks the length of the qmail mail queue.),
+  extra => qq(
+Note that this plugin should either run as root (e.g. using sudo), or you 
+should add the nagios user to the 'qmail' group.),
+);
+
+# Defaults
+my $warn_unprocessed = 1;
+my $crit_unprocessed = 5;
+my $qmail_qstat = '/var/qmail/bin/qmail-qstat';
+
+$ng->arg(
+  spec => "warning|w=i",
+  help => q(-w, --warning=INTEGER
+   Exit with WARNING status if qmail queue is longer than INTEGER emails),
+  required => 1,
+);
+$ng->arg(
+  spec => "critical|c=i",
+  help => q(-c, --critical=INTEGER
+   Exit with CRITICAL status if qmail queue is longer than INTEGER emails),
+  required => 1,
+);
+$ng->arg(
+  spec => "warning-preprocessed|W=i",
+  help => qq(-W, --warning-preprocessed=INTEGER
+   Exit with WARNING status if un-preprocessed qmail queue is longer than 
+     INTEGER emails. Default: $warn_unprocessed.),
+  default => $warn_unprocessed, 
+);
+$ng->arg(
+  spec => "critical-preprocessed|C=i",
+  help => qq(-C, --critical-preprocessed=INTEGER
+   Exit with CRITICAL status if un-preprocessed qmail queue is longer than 
+     INTEGER emails. Default: $crit_unprocessed.),
+  default => $crit_unprocessed, 
+);
+$ng->arg(
+  spec => "qmail-qstat|q=s",
+  help => q(-q, --qmail-qstat=/path/to/qmail-qstat
+   Path to qmail-qstat. Default: /var/qmail/bin/qmail-qstat.),
+  default => $qmail_qstat,
+);
+
+$ng->getopts;
+
+my $np = Nagios::Plugin->new;
+
+$qmail_qstat = $ng->get('qmail-qstat');
+$np->nagios_exit(UNKNOWN, "cannot find $qmail_qstat") 
+  unless -f $qmail_qstat && -x $qmail_qstat;
+
+# Do the qmail-qstat
+alarm($ng->timeout);
+$np->nagios_exit(UNKNOWN, "No output from $qmail_qstat") 
+  unless open QSTAT, "$qmail_qstat|";
+my @lines = <QSTAT>;
+chomp foreach @lines;
+close QSTAT;
+
+my (@crit, @warn);
+
+# Messages in queue
+if ($lines[0] =~ /^messages in queue: (\d+)/) {
+  push @crit, $lines[0] if $1 >= $ng->critical;
+  push @warn, $lines[0] if $1 >= $ng->warning;
+} else {
+  push @crit, "weird line 1 response from $qmail_qstat: " . $lines[0] || "''";
+}
+
+# Messages not yet preprocessed
+if ($lines[1]=~/^messages in queue but not yet preprocessed: (\d+)/) {
+  push @crit, $lines[1] if $1 >= $ng->get('critical-preprocessed');
+  push @warn, $lines[1] if $1 >= $ng->get('warning-preprocessed');
+} else {
+  push @crit, "weird line 2 response from $qmail_qstat: " . $lines[1] || "''";
+}
+
+$np->nagios_exit(
+  $np->check_messages(critical => \@crit, warning => \@warn, ok => \@lines)
+);
+
+
+# arch-tag: ccb70943-0ea1-4af4-b344-a83dcce0c9e4
+# vim:ft=perl:sw=2

@@ -1,0 +1,30 @@
+#!/usr/bin/perl
+#
+# Parse traffic interface statistics from the check_snmp_int.pl plugin
+#
+# Example: FastEthernet0/1_in_octet=780680070c FastEthernet0/1_out_octet=562925883c FastEthernet0/0_in_octet=1642756303c FastEthernet0/0_out_octet=1773069840c
+#
+
+use strict;
+use IO::File;
+
+my $host = shift @ARGV;
+my $int = shift @ARGV;
+
+# Set of internal interfaces, for which we need to invert sense of 'in' and 'out'
+my %internal = map { $_ => 1 } qw(FastEthernet0/1);
+my $invert = 1 if $internal{$int};
+
+my $fh = IO::File->new("/var/log/nagios/perf/$host/INTERFACES", "r");
+if (defined $fh) {
+  my @int = map { s/^\Q$int\E/traffic/; s/_octet//; s/c$//; s/=/:/g; $_ } 
+    grep /^\Q$int\E/, split(/\s+/, <$fh>);
+  my $output = join(' ', @int);
+  if ($invert) {
+    $output =~ s/_in/_XXXX/g;
+    $output =~ s/_out/_in/g;
+    $output =~ s/_XXXX/_out/g;
+  }
+  print "$output\n";
+}
+

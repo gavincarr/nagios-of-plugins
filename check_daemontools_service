@@ -1,0 +1,101 @@
+#!/usr/bin/perl -w
+#
+# Nagios plugin to check the state of a local daemontools service
+# 
+# Note this that plugin usually needs to be run as root e.g. via sudo
+#   because of the permissions on the supervise directory
+#
+
+use strict;
+use File::Basename;
+use File::Spec;
+use Nagios::Plugin::Getopt;
+use Nagios::Plugin::Functions 0.1301;
+
+my $ng = Nagios::Plugin::Getopt->new(
+  usage => q(Usage: %s -s <service> [-c <crit_secs>] [-w <warn_secs>] [-v]),
+  version => '0.02',
+  url => 'http://www.openfusion.com.au/labs/nagios/',
+  blurb => q(This plugin checks the state of a local daemontools service.),
+);
+
+$ng->arg(
+  spec => "service|s=s",
+  help => qq(-s, --service=STRING
+   Name of service to check (bare name or full path, globs are okay too)), 
+  required => 1);
+$ng->arg(
+  spec => "warning|w=i",
+  help => qq(-w, --warning=INTEGER
+   Exit with WARNING status if service has been up for <= INTEGER seconds
+   Default: 900 (15 mins).),
+  default => 900);
+$ng->arg(
+  spec => "critical|c=i",
+  help => qq(-c, --critical=INTEGER
+   Exit with CRITICAL status if service has been up for <= INTEGER seconds
+   Default: %s.),
+  default => 2);
+
+$ng->getopts;
+
+my $warning = $ng->warning;
+my $critical = $ng->critical;
+
+# Check various error conditions
+my $service = $ng->service;
+$service = File::Spec->rel2abs($service, '/service');
+my $sname = File::Spec->abs2rel($service, '/service');
+nagios_exit(UNKNOWN, "cannot find service directory '$service'")
+  unless -d $service or glob $service;
+
+# Locate svstat
+my $svstat = '';
+for (File::Spec->path) {
+  if (-x File::Spec->catfile($_, 'svstat')) {
+    $svstat = File::Spec->catfile($_, 'svstat');
+    last;
+  }
+}
+nagios_exit(UNKNOWN, "cannot find 'svstat' executable in path")
+  unless $svstat;
+
+# Setup timeout
+alarm($ng->timeout);
+$SIG{ALRM} = sub { nagios_exit(UNKNOWN, "check timed out after " . $ng->timeout . "s") };
+
+# Do the check
+my $stat = qx($svstat $service) or
+  nagios_exit(UNKNOWN, "no svstat output found");
+chomp $stat;
+nagios_exit(UNKNOWN, "svstat error: $stat") if $stat =~ m/unable/;
+my @stat = split /\n/, $stat;
+nagios_exit(UNKNOWN, "multiple services match this glob: " . join(',', map { s/:.*//; $_ } @stat))
+  if scalar @stat > 1;
+
+if (my ($state, $uptime) = ($stat =~ m!^[^:]+: (\w+) (?:\(pid \d+\) )?(\d+) seconds!)) {
+  $stat =~ s/^[^:]+:\s*//;
+  if ($state eq 'down' || $stat =~ m/wants? down/) {
+    nagios_exit(WARNING, $stat);
+  }
+  elsif ($state eq 'up') {
+    if ($uptime <= $critical) {
+      nagios_exit(CRITICAL, "$sname cycling? $stat");
+    } 
+    elsif ($uptime <= $warning) {
+      nagios_exit(WARNING, $stat);
+    }
+    else {
+      nagios_exit(OK, $stat);
+    }
+  }
+  else {
+    nagios_exit(UNKNOWN, "weird svstat state: '$stat'");
+  }
+}
+else {
+  nagios_exit(UNKNOWN, "error parsing svstat output '$stat'");
+}
+
+# arch-tag: e8068421-ab99-43a2-928e-6fb0bc865b4e
+# vim:ft=perl:ai:sw=2

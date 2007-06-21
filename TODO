@@ -1,0 +1,27 @@
+
++ add glob support to check_daemontools_service (but must expand to just one)
+
+- allow check_daemontools_service to check on multiple services, rather than just one
+- add range support to check_daemontools_service, to allow warning on max uptime, not just minimum
+
+
+
+- implement a check_tabular_output plugin, with areca cli output in mind e.g.
+  -C command
+  -F file
+  -f field
+  -o operator (eq, ne, lt, le, gt, ge, ==, !=, <, <=, >, >=, =~, !~, in, not in)
+  -w warning value (scalar or range)
+  -c critical value (scalar or range)
+  -n count
+  -V value filter
+  -s perl sub
+  e.g. check_tabular_output -C "/usr/bin/cli64 hw info" -f 
+  sub: 'sub { $o = shift; $status = $o->[0]->{STATUS}; return ("CRITICAL", "foo") if $status > 3; return ("WARNING", "bar") if $status > 5; return ("OK", "status $status") }'
+
+
+__DONE__
+
++ add --exclude-cache and --exclude-buffers (and -warning and -critical 
+  variants) to check_memory
+

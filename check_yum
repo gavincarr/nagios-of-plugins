@@ -1,0 +1,231 @@
+#!/usr/bin/perl -w
+#
+# check_yum/check_up2date - nagios plugin to check for outstanding updates via yum 
+#   (or up2date if invoked as check_up2date)
+#
+
+use strict;
+use File::Basename;
+use Nagios::Plugin::Getopt;
+use Nagios::Plugin::Functions 0.1301;
+
+my $plugin = basename($ENV{NAGIOS_PLUGIN} || $0);
+my $ng = Nagios::Plugin::Getopt->new(
+  usage => qq(Usage: %s [-d default-level ] [-t timeout] [-v]
+                 [-w warning-pkgs] [-W warning-repos]
+                 [-c critical-pkgs] [-C critical-repos]
+                 [-x exclude-pkgs] [-X exclude-repos]\n),
+  version => '0.04',
+  url => 'http://www.openfusion.com.au/labs/nagios/',
+  blurb => qq(This plugin checks for outstanding package updates via yum or up2date.),
+  extra => qq(Package lists (-w, -c, -x etc.) take precedence over repository lists 
+(-W, -C, -X etc.).
+
+Tokens in package lists may include glob-style wildcards, as well as literals 
+e.g. -x 'kernel*' -c 'httpd*,mod_*,rsync'. Repository lists do NOT support 
+wildcards, however.
+
+Note that $plugin probably needs to run as root to work correctly.),
+);
+$ng->arg("warning|w=s", qq(-w, --warning=STRING
+    Packages (comma-separated) to treat as warnings));
+$ng->arg("critical|c=s", qq(-c, --critical=STRING
+    Packages (comma-separated) to treat as critical));
+$ng->arg("exclude|x=s", qq(-x, --exclude=STRING
+    Packages (comma-separated) to exclude/ignore));
+$ng->arg("warning-repo|W=s", qq(-W, --warning-repos=STRING
+    Repositories (comma-separated) to treat as warnings));
+$ng->arg("critical-repo|C=s", qq(-C, --critical-repos=STRING
+    Repositories (comma-separated) to treat as critical));
+$ng->arg("exclude-repo|X=s", qq(-X, --exclude-repos=STRING
+    Repositories (comma-separated) to exclude/ignore));
+$ng->arg("default|d=s", qq(-d, --default=STRING
+    Default level: c | w | x | critical | warning | exclude (default: %s)), 
+    'critical');
+
+# ------------------------------------------------------------------------
+# Subroutines
+
+# Setup package data structures
+my (%PKG, %PKG_REGEX);
+sub pkg_setup
+{
+  my ($crit, $warn, $excl) = @_;
+  %PKG = ( CRITICAL => {}, WARNING => {}, EXCLUDE => {} );
+  $PKG{CRITICAL} = { map { $_ => 1 } split /,/, $crit } if $crit; 
+  $PKG{WARNING}  = { map { $_ => 1 } split /,/, $warn } if $warn;
+  $PKG{EXCLUDE}  = { map { $_ => 1 } split /,/, $excl } if $excl;
+
+  # Separate out wildcard package designations
+  %PKG_REGEX = ( CRITICAL => [], WARNING => [], EXCLUDE => [] );
+  for my $level (qw(CRITICAL WARNING EXCLUDE)) {
+    for my $pkg (keys %{$PKG{$level}}) {
+      if ($pkg =~ m/\*/) {
+        delete $PKG{$level}->{$pkg};
+        # Turn glob-style package designation (e.g. kernel*) into regex
+        $pkg =~ s/\*/.*/g;
+        $pkg =~ s/^/^/;
+        $pkg =~ s/$/\$/;
+        print "Adding regex '$pkg' to $level package wildcards\n" 
+          if $ng->verbose >= 2;
+        push @{$PKG_REGEX{$level}}, $pkg;
+      }
+    }
+  }
+}
+
+# Match the given repo against the entries in the repo hash
+sub pkg_match
+{
+  my $pkg = shift;
+  return unless $pkg;
+
+  # Check literal package names
+  for my $level (qw(CRITICAL WARNING EXCLUDE)) {
+    return $level if exists $PKG{$level}->{$pkg};
+  }
+ 
+  # Check package regexes
+  for my $level (qw(CRITICAL WARNING EXCLUDE)) {
+    for my $re (@{$PKG_REGEX{$level}}) {
+      return $level if $pkg =~ m/$re/i;
+    }
+  }
+}
+
+# Setup repository data structures
+my %REPO;
+sub repo_setup
+{
+  my ($crit, $warn, $excl) = @_;
+  %REPO = ( CRITICAL => {}, WARNING => {}, EXCLUDE => {} );
+  $REPO{CRITICAL} = { map { $_ => 1 } split /,/, $crit } if $crit;
+  $REPO{WARNING}  = { map { $_ => 1 } split /,/, $warn } if $warn;
+  $REPO{EXCLUDE}  = { map { $_ => 1 } split /,/, $excl } if $excl;
+}
+
+# Match the given repo against the entries in the repo hash
+sub repo_match
+{
+  my $repo = shift;
+  return unless $repo;
+  for my $level (qw(CRITICAL WARNING EXCLUDE)) {
+    return $level if exists $REPO{$level}->{$repo};
+  }
+}
+
+# ------------------------------------------------------------------------
+# Main
+
+my $MODE = $plugin;
+$MODE =~ s/^check_//;
+my $EXE = -x "/usr/sbin/$MODE" ? "/usr/sbin/$MODE" : "/usr/bin/$MODE";
+my %EXE_ARGS = (
+  yum => '-e0 -d0 check-update',
+  up2date => '--nox --list',
+);
+
+nagios_exit(UNKNOWN, "invalid mode '$MODE'") unless exists $EXE_ARGS{$MODE};
+nagios_exit(UNKNOWN, "cannot find $EXE") unless -f $EXE && -x $EXE;
+
+$ng->getopts;
+
+my $default = $ng->default;
+nagios_exit(UNKNOWN, "invalid default '$default'") 
+  if $default && ! grep /^$default$/i, qw(c w x critical warning exclude);
+$default = uc substr($default,0,1);
+
+# Do the yum/up2date check
+alarm($ng->timeout);
+my $cmd = "$EXE $EXE_ARGS{$MODE}";
+print "cmd: $cmd\n" if $ng->verbose >= 2;
+my $out = `$cmd`;
+my $rc = $? >> 8;
+alarm(0);
+
+# Up to date
+if ($MODE eq 'yum' && $rc == 0) {
+  nagios_exit(OK, "all packages up to date");
+}
+
+# Unknown error
+elsif ($MODE eq 'yum' && $rc != 100) {
+  nagios_exit(UNKNOWN, "$MODE check failed ($rc):\n$out");
+} 
+
+# Updates found, or up2date mode (rc's are bogus and inconsistent)
+else {
+  my $results;
+  # Get set of updates
+  my $packages = $out;
+  # I'm not sure this works, but I'm not using up2date much these days ... feedback/patches welcome
+  if ($MODE eq 'up2date') {
+    $packages =~ s/^.*?-----\n//s;
+    $packages =~ s/\n\n.*$//s;
+    $packages =~ s/^\n.*$//s;
+  } else {
+    $packages =~ s/^.*\n\s*\n//s;
+  }
+  print "packages:\n$packages\n" if $ng->verbose >= 2;
+  my @updates = split /\s*\n/, $packages;
+  unless (@updates) {
+    $results = "all packages up to date\n";
+    $results .= $packages if $ng->verbose;
+    nagios_exit(OK, $results);
+  }
+
+  # Iterate over update packages
+  my @warning = ();
+  my @critical = ();
+  pkg_setup($ng->critical, $ng->warning, $ng->exclude);
+  repo_setup($ng->get('critical-repo'), $ng->get('warning-repo'), $ng->get('exclude-repo'));
+  for my $update (@updates) {
+    my @field = split /\s+/, $update;
+    next unless @field;
+
+    # Categorise this package
+    my $level = '';
+    if ($level = pkg_match($field[0])) {
+      if ($level eq 'CRITICAL') {
+        push @critical, $field[0];
+      } elsif ($level eq 'WARNING') {
+        push @warning, $field[0];
+      } else {
+        next;
+      }
+    } elsif ($level = repo_match($field[$#field])) {
+      if ($level eq 'CRITICAL') {
+        push @critical, $field[0];
+      } elsif ($level eq 'WARNING') {
+        push @warning, $field[0];
+      } else {
+        next;
+      }
+    }
+    # Fallback to default action
+    elsif ($default eq 'C') {
+      push @critical, $field[0];
+    } elsif ($default eq 'W') {
+      push @warning, $field[0];
+    }
+  }
+
+  # Return OK unless we have critical or warning packages
+  unless (@critical || @warning) {
+    $results = "all packages up to date\n";
+    $results .= sprintf("(%d updates found, but all excluded)\n",
+      scalar(@updates)) if $ng->verbose;
+    $results .= $packages if $ng->verbose;
+    nagios_exit(OK, $results);
+  }
+
+  # Output results
+  $results = sprintf "updates found: %d critical, %d warning\n", 
+    scalar(@critical), scalar(@warning);
+  $results .= $packages if $ng->verbose;
+
+  nagios_exit(@critical ? CRITICAL : WARNING, $results);
+}
+
+
+# arch-tag: 6b5e3849-a597-4185-b926-912f13a27e88

@@ -1,0 +1,103 @@
+#!/usr/bin/perl -w
+#
+# Nagios plugin to return a WARNING if a newer kernel package is available 
+#   than the kernel that is running.
+#
+
+use strict;
+use File::Basename;
+use Nagios::Plugin::Getopt;
+use Nagios::Plugin 0.1301;
+
+my $ng = Nagios::Plugin::Getopt->new(
+  usage => qq(Usage: %s [--pkg <pkgmgr>] [-v]),
+  version => '0.03',
+  url => 'http://www.openfusion.com.au/labs/nagios/',
+  blurb => qq(This plugin checks whether a newer linux kernel package is available.),
+);
+$ng->arg(
+  spec => "pkg|p", 
+  help => q(-p, --pkg
+   Package manager to use to locate alternative kernels.
+   Currently only 'rpm' is supported.),
+  default => 'rpm');
+$ng->getopts;
+
+my $np = Nagios::Plugin->new;
+
+# ----------------------------------------------------------------------------
+# Subroutines
+
+# Canonicalise version numbers to work around bad numeric comparisons
+sub canonical
+{
+  my $version = shift;
+  my @canonical = ();
+  for my $comp (split /\W+/, $version) {
+    if ($comp =~ m/^(\d+)(.*?)/) {
+      push @canonical, sprintf "%03d%s", $1, $2;
+    }
+  }
+  return join '.', @canonical;
+}
+
+# ----------------------------------------------------------------------------
+
+# Exit with an error if we're not on Linux
+$np->nagios_exit(UNKNOWN, $np->shortname . " only works on Linux") 
+    unless $^O eq 'linux';
+
+alarm($ng->timeout);
+
+# Get current kernel version
+my $CURRENT = `uname -r`;
+chomp $CURRENT;
+$np->nagios_exit(UNKNOWN, "cannot determine current kernel version ('$CURRENT')")
+  unless $CURRENT;
+my $CANONICAL = canonical($CURRENT);
+print STDERR "+ current kernel: $CURRENT (canonical $CANONICAL)\n" 
+  if $ng->verbose;
+
+# Get available packages
+my ($AVAILABLE, $prefix);
+if (lc $ng->pkg eq 'rpm') {
+  my $kernel = 'kernel';
+  $kernel .= '-smp' if $CURRENT =~ m/smp$/;
+  $AVAILABLE = "rpm -q $kernel";
+  $prefix = "$kernel-";
+}
+else {
+  $np->nagios_exit(UNKNOWN, "unsupported pkg manager '" . $ng->pkg . "'");
+}
+
+$np->nagios_exit(UNKNOWN, "no output from '$AVAILABLE': $!") 
+  unless open QUERY, "$AVAILABLE|";
+my @avail = <QUERY>;
+close QUERY;
+chomp foreach @avail;
+$np->nagios_exit(UNKNOWN, "no output from '$AVAILABLE'") unless @avail;
+if ($prefix) {
+  s/^$prefix// foreach @avail;
+}
+print STDERR "+ available kernels:\n  " . join("\n  ",@avail) . "\n" 
+  if $ng->verbose;
+my %avail = map { canonical($_) => $_ } @avail;
+my @latest = reverse sort keys %avail;
+print STDERR "+ canonical available kernels:\n  " . join("\n  ",@latest) . "\n" 
+  if $ng->verbose;
+my $latest = $avail{$latest[0]};
+printf STDERR "+ latest is %s (canonical %s)\n", $latest, $latest[0]
+  if $ng->verbose;
+
+$latest .= 'smp' if $CURRENT =~ m/smp$/;
+my $results = sprintf "latest available kernel is %s, running is %s", 
+  $latest, $CURRENT;
+if ($latest[0] gt $CANONICAL) {
+  $np->nagios_exit(WARNING, $results);
+}
+else {
+  $np->nagios_exit(OK, $results);
+}
+
+# arch-tag: a1cd19f6-dc75-4cec-9508-c16313e20e4b
+# vim:ft=perl:ai:sw=4

@@ -1,0 +1,87 @@
+#!/usr/bin/perl -w
+#
+# grep-like nagios plugin - returns OK if regex is found, else CRITICAL.
+#
+
+=todo
+
+- maybe we should a -a flag to report all matches found (up to some limit)
+
+=cut
+
+use strict;
+use Nagios::Plugin::Getopt;
+use Nagios::Plugin 0.16;
+
+my $ng = Nagios::Plugin::Getopt->new(
+  usage => qq(Usage: %s [-v] <regex>),
+  version => '0.3',
+  url => 'http://www.openfusion.com.au/labs/nagios/',
+  blurb => qq(This plugin acts like an egrep for nagios, reading from stdin until EOF, 
+returning OK if the given regex is found, and CRITICAL otherwise.),
+);
+$ng->arg(
+  spec => 'command|C=s',
+  help => q(Command to execute (grepping output instead of stdin).),
+);
+$ng->arg(
+  spec => 'ignore-case|i',
+  help => q(Ignore case distinctions when matching.),
+);
+$ng->arg(
+  spec => 'invert|invert-match',
+  help => q(Invert sense of match i.e. return CRITICAL if regex is found, OK otherwise.),
+);
+$ng->getopts;
+
+my $np = Nagios::Plugin->new;
+
+$np->die("No regex argument given to search for") unless @ARGV;
+$np->die("Too many arguments found - please quote multi-word regex") if @ARGV > 1;
+
+my $regex = shift @ARGV;
+
+alarm($ng->timeout);
+
+my $data = '';
+if (my $cmd = $ng->command) {
+  $data = qx($cmd);
+}
+else {
+  while (<>) { $data .= $_ }
+}
+
+# Check match
+my $ic = $ng->get('ignore-case') ? 'i' : '';
+my $match = $1 if $data =~ m/(?$ic)(.*$regex.*)/m;
+if ($match) {
+  # Truncate data if too long
+  $match = substr($match, 0, 256);
+  # Escape | signs to avoid being interpreted as perfdata
+  $match =~ s/\|/:/g;
+  # Output
+  $np->nagios_exit($ng->invert ? CRITICAL : OK, "First match: $match");
+}
+
+# No match
+else {
+  my $msg =  "Regex '$regex' not found";
+
+  # Find first non-empty data line
+  my $line = '';
+  for (split /\n/, $data) {
+    $line = $_, last if m/\S/;
+  }
+  if ($line) {
+    # Truncate data if too long
+    $line = substr($line, 0, 256);
+    $msg .= " (first output: '$line')";
+  }
+
+  # Output
+  $np->nagios_exit($ng->invert ? OK : CRITICAL, $msg);
+}
+
+#arch-tag: 75170fd6-c360-4082-a6f2-b5bcb763b244
+#vim:ft=perl:ai:sw=4
+

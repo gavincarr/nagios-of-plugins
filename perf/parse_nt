@@ -1,0 +1,28 @@
+#!/usr/bin/perl
+#
+# Parse perfdata from the check_nt plugin
+#
+# Example: 5 min avg Load=4%;90;95;0;100 15 min avg Load=4%;90;95;0;100
+#
+
+use strict;
+use IO::File;
+
+my $host = shift @ARGV;
+my $file = shift @ARGV;
+my $label_re = shift @ARGV || '.';
+
+my $fh = IO::File->new("/var/log/nagios/perf/$host/$file", "r");
+if (defined $fh) {
+  my $pref = <$fh>;
+  while ($pref =~ m/(.*?)=(\S+)\s*/g) {
+    my $label = $1;
+    my $data = $2;
+    next unless $label =~ $label_re;
+    my ($first) = split /;/, $data;
+    $first =~ s/\D+\s*$//;
+    print defined $first ? $first : 0;
+    print "\n";
+  }
+}
+

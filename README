@@ -1,0 +1,48 @@
+Open Fusion Nagios Plugins
+==========================
+
+Prerequisites
+-------------
+
+Nagios::Plugin from CPAN (>= 0.14).
+
+If you want to use check_by_ssh to do local checks on remote boxes, you want 
+to setup an ssh key (with no passphrase) for your master nagios user and add 
+it to the '.ssh/authorized_keys' file for each of your remote nagios users. 
+Depending on your sshd config on the remote box, you might also need to tweak 
+the remote AuthorizedUsers setting, and/or tweak firewalls.
+
+
+check_yum / check_up2date
+-------------------------
+
+This plugin checks for outstanding yum or up2date packages on the given host. 
+Because both yum and up2date need to run as root in order to be able to update 
+package headers, you normally want to run these plugins via sudo, adding the 
+following to your 'sudoers' file on the remote box:
+
+  # Allow nagios to run certain plugins as root
+  nagios  ALL=(ALL) NOPASSWD: /usr/lib/nagios/plugins/check_up2date,/usr/lib/nagios/plugins/check_yum
+
+I usually add check commands like the following:
+
+  # 'check_yum'
+  define command {
+    command_name    check_up2date
+    command_line    $USER1$/check_by_ssh -4 -H $HOSTNAME$ -t 20 -C 'sudo /usr/lib/nagios/plugins/check_yum'
+  }
+  # 'check_up2date'
+  define command {
+    command_name    check_up2date
+    command_line    $USER1$/check_by_ssh -4 -H $HOSTNAME$ -t 20 -C 'sudo /usr/lib/nagios/plugins/check_up2date'
+  }
+
+
+check_qmailq
+------------
+
+check_qmailq needs to have access to the qmail mail queue to work, so it
+either needs to run as root (as above e.g. via sudo), or you need to add
+your nagios user to the 'qmail' group. The latter is normally reasonably
+sensible - the qmail group has only read access to the queues in question.
+

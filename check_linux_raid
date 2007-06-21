@@ -1,0 +1,124 @@
+#!/usr/bin/perl -w
+#
+# Plugin to check status of linux mdstat raid partitions
+#   Some code taken from check_linux_raid.pl by Steve Milton, 
+#     Copyright (c) 2002 ISOMEDIA, Inc.
+#
+
+use strict;
+use File::Basename;
+use Nagios::Plugin::Getopt;
+use Nagios::Plugin 0.1301;
+
+my $ng = Nagios::Plugin::Getopt->new(
+  usage => q(Usage: %s [-e] [-v]),
+  version => '0.03',
+  url => 'http://www.openfusion.com.au/labs/nagios/',
+  blurb => q(This plugin checks the status of linux mdstat raid partitions.),
+);
+$ng->arg("errors-only|e", 
+  qq(-e, --errors-only\n Display only devices with errors));
+$ng->getopts;
+
+my $np = Nagios::Plugin->new;
+
+# Exit with an error if we're not on Linux
+$np->nagios_exit(UNKNOWN, $np->shortname . " only works on Linux") 
+    unless $^O eq 'linux';
+
+open(MDSTAT, "</proc/mdstat") or
+    $np->nagios_exit(CRITICAL, "Failed to open /proc/mdstat: $!");
+
+my %md = ();
+my $current = '';
+while (<MDSTAT>) {
+    chomp;
+    if (/^(md\d+)\s*:/) {
+        my $dev = $1;
+        $md{$dev} ||= {};
+        $md{$dev}->{line1} = $_;
+        $md{$dev}->{line1} =~ s/\s+$//;
+        $md{$dev}->{active} = 1 if m/active/;
+        $current = $dev;
+    }
+    elsif (m/^\s*$/) {
+        undef $current;
+    }
+    elsif ($current) {
+        if (/(\[[_U]+\])/) {
+            $md{$current}->{status} = $1;
+            $md{$current}->{line2} = $_;
+            $md{$current}->{line2} =~ s/^\s+//;
+            $md{$current}->{line2} =~ s/\s+$//;
+        }
+        elsif (/recovery\s*=\s*(\S+)/) {  
+            $md{$current}->{recovery} = $1;
+            $md{$current}->{line3} = $_;
+            $md{$current}->{line3} =~ s/^\s+//;
+            $md{$current}->{line3} =~ s/\s+$//;
+            $md{$current}->{finish} = $1 if /finish\s*=\s*(\S+)/;
+        }
+        elsif (/resync\s*=\s*(\S+)/) {  
+            $md{$current}->{resync} = $1;
+            $md{$current}->{line3} = $_;
+            $md{$current}->{line3} =~ s/^\s+//;
+            $md{$current}->{line3} =~ s/\s+$//;
+            $md{$current}->{finish} = $1 if /finish\s*=\s*(\S+)/;
+        }
+    }
+}
+
+eval { require YAML; print "md data:\n" . YAML::Dump(\%md) } if $ng->verbose;
+
+my @check;
+if (@ARGV) {
+    my @bogus = grep { ! exists $md{$_} } @ARGV;
+    if (@bogus) {
+        $np->nagios_exit(CRITICAL, 
+            sprintf("Unknown md device%s: %s", 
+                (@bogus > 1 ? 's' : ''), 
+                join(' ', @bogus)
+            )
+        );
+    }
+    @check = @ARGV;
+}
+else {
+    @check = sort keys %md;
+}
+$np->nagios_exit(UNKNOWN, "No raid devices found") unless @check;
+
+my (@crit, @warn, @ok);
+for my $dev (@check) {
+    my $status = sprintf("%s%s%s", 
+        $md{$dev}->{line1} || '',
+        $md{$dev}->{line2} ? ' ' . $md{$dev}->{line2} : '',
+        $md{$dev}->{line3} ? ' ' . $md{$dev}->{line3} : '',
+    );
+    if ($md{$dev}->{status} && $md{$dev}->{status} =~ m/_/) {
+        if ($md{$dev}->{recovery}) {
+            push @warn, $status;
+        }
+        else {
+            push @crit, $status;
+        }
+    }
+    elsif ($md{$dev}->{status} && $md{$dev}->{status} =~ m/\[U+\]/) {
+        push @ok, $status unless $ng->get('errors-only');
+    }
+    elsif ($md{$dev}->{active}) {
+        push @ok, $status unless $ng->get('errors-only');
+    }
+    else {
+        push @crit, $status;
+    }
+}
+
+my $results = join ' :: ', @crit, @warn, @ok;
+$results ||= sprintf "%s raid device%s found, all OK", 
+    scalar(keys %md), (scalar(keys %md) == 1 ? '' : 's');
+my $code = $np->check_messages(critical => \@crit, warning => \@warn);
+$np->nagios_exit($code, $results);
+
+# arch-tag: 1956e645-1026-4fda-a953-dfea5dbf1ae1
+# vim:ft=perl:ai:sw=4

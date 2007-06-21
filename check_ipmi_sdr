@@ -1,0 +1,96 @@
+#!/usr/bin/perl -w
+#
+# check_ipmi_sdr - nagios plugin to check the value of numeric 
+#   'ipmitool sdr' sensors
+#
+
+use strict;
+use Nagios::Plugin 0.16;
+
+my $np = Nagios::Plugin->new(
+  usage => q(Usage: %s [-a] -s <sensor> -w <warn_threshold> -c <crit_threshold>),
+  version => '0.01',
+  url => 'http://www.openfusion.com.au/labs/nagios/',
+  blurb => q(This plugin checks the value of arbitrary numeric 'ipmitool sdr' sensors.),
+);
+$np->add_arg(
+  spec => "sensor|s=s",
+  help => q(Sensor name to check),
+  required => 1,
+);
+$np->add_arg(
+  spec => "warning|w=s",
+  label => 'NUMBER',
+  help => q(Exit with WARNING if sensor value > NUMBER),
+  required => 1,
+);
+$np->add_arg(
+  spec => "critical|c=s",
+  label => 'NUMBER',
+  help => q(Exit with CRITICAL if sensor value > NUMBER),
+  required => 1,
+);
+$np->add_arg(
+  spec => 'all|a',
+  help => q(Check for multiple sensors with the same name, not just the first),
+);
+$np->getopts;
+my $opts = $np->opts;
+
+# Get and parse ipmitool sdr output
+my $output = '';
+if ($ENV{NP_CHECK_IPMI_SDR_TEST_FILE}) {
+  require File::Slurp;
+  $output = File::Slurp::read_file($ENV{NP_CHECK_IPMI_SDR_TEST_FILE});
+}
+$output ||= qx(ipmitool sdr list);
+$np->nagios_die("'ipmitool sdr list' returned no data")
+  unless $output;
+chomp $output;
+my ($sensor, $value, $value_numeric, $status, $found);
+my @value = ();
+for (split /\r?\n/, $output) {
+  my ($s, $v, $st) = split /\s+\|\s+/, $_;
+  if (uc $s eq uc $opts->sensor) {
+    next if $v =~ m/^(Not Readable)$/i;
+    $found = 1;
+
+    # Parse first numeric from value
+    my ($vnumeric) = ($v =~ m/(\d+(\.\d+)?)/);
+    $np->nagios_die("Could not extract number from $s value '$v'") 
+      unless defined $vnumeric;
+
+    if ($opts->{all}) {
+      push @value, $v;
+      if (! $value || $vnumeric > $value_numeric) {
+        ($sensor, $value, $value_numeric, $status) = ($s, $v, $vnumeric, $st);
+      }
+    }
+    else {
+      ($sensor, $value, $value_numeric, $status) = ($s, $v, $vnumeric, $st);
+      last;
+    }
+  }
+}
+$np->nagios_die("Could not find sensor '" . $opts->sensor . "'") 
+  unless $found;
+
+# Add performance data
+my $sensor_lc = lc $opts->sensor;
+$sensor_lc =~ s/\W+/_/g;
+$np->add_perfdata(
+  label => $sensor_lc,
+  value => $value_numeric,
+  warning => $opts->warning,
+  critical => $opts->critical,
+);
+
+# Check/exit
+$np->shortname(uc $sensor_lc);
+$np->nagios_exit( $np->check_threshold($value_numeric), @value ? join(' / ', @value) : $value );
+  
+
+# vim:ft=perl:sw=2:sm
+
+__END__
+

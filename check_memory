@@ -1,0 +1,178 @@
+#!/usr/bin/perl -w
+#
+# check_memory - nagios plugin to check local memory utilisation.
+#
+# Uses Linux::MemInfo on linux, if available; otherwise uses Sys::MemInfo. 
+# Should work on all platforms Sys::MemInfo supports, including windows.
+#
+
+use strict;
+use Nagios::Plugin 0.16;
+use Nagios::Plugin::Functions 0.16 qw(convert);
+
+my $np = Nagios::Plugin->new(
+  usage => q(Usage: %s [--free|--used] -w <warn_threshold> -c <crit_threshold>),
+  version => '0.01',
+  url => 'http://www.openfusion.com.au/labs/nagios/',
+  blurb => q(This plugin checks memory utilisation on the local machine.),
+);
+
+$np->add_arg(
+  spec => "warning|w=s",
+  label => [ qw(INTEGER PERCENT%) ],
+  help => [
+    'Exit with WARNING if less (more) than INTEGER bytes of memory are free (used)',
+    'Exit with WARNING if less (more) than PERCENT of memory is free (used)',
+  ],
+  required => 1,
+);
+$np->add_arg(
+  spec => "critical|c=s",
+  label => [ qw(INTEGER PERCENT%) ],
+  help => [
+    'Exit with CRITICAL if less (more) than INTEGER bytes of memory are free (used)',
+    'Exit with CRITICAL if less (more) than PERCENT of memory is free (used)',
+  ],
+  required => 1,
+);
+$np->add_arg(
+  spec => 'free',
+  help => q(Interpret thresholds as amount of free memory (rather than memory used)),
+);
+$np->add_arg(
+  spec => 'used',
+  help => q(Interpret thresholds as amount of used memory (rather than memory free)),
+);
+$np->add_arg(
+  spec => 'exclude-buffers',
+  help => q(Exclude buffers from usage calculations (requires Linux::MemInfo)),
+);
+$np->add_arg(
+  spec => 'exclude-cache|exclude-cached',
+  help => q(Exclude cache from usage calculations (requires Linux::MemInfo)),
+);
+$np->getopts;
+my $opts = $np->opts;
+
+# Check for Linux::MemInfo if using exclude options
+if ($opts->get('exclude-buffers') || $opts->get('exclude-cache')) {
+  if (! defined eval { require Linux::MemInfo } || 
+      $ENV{NP_CHECK_MEMORY_USE_SYS_MEMINFO}) {
+    warn "Warning: Linux::MemInfo not found - ignoring --exclude-buffers/cache options\n";
+    $opts->set('exclude-buffers', 0);
+    $opts->set('exclude-cache',   0);
+  }
+}
+
+# Strip percent signs from warning/critical
+my ($warning_pct, $critical_pct) = (0, 0);
+my $warning = $opts->warning;
+if ($warning =~ m/(\D*%\s*)$/) {
+  $warning =~ s/$1$//;
+  $warning_pct = 1;
+}
+my $critical = $opts->critical;
+if ($critical =~ m/(\D*%\s*)$/) {
+  $critical =~ s/$1$//;
+  $critical_pct = 1;
+}
+
+# Determine free/used mode
+$np->nagios_exit(UNKNOWN, "Cannot specify both --free and --used")
+  if $opts->free && $opts->used;
+my $mode = '';
+{
+  $mode = 'free', last if $opts->free;
+  $mode = 'used', last if $opts->used;
+  $mode = $warning > $critical ? 'free' : 'used';
+}
+
+# Instantiate MemInfo object
+my %meminfo = ();
+my $meminfo_type;
+if ($^O eq 'linux' && ! $ENV{NP_CHECK_MEMORY_USE_SYS_MEMINFO}) {
+  eval {
+    require Linux::MemInfo;
+    my %lmi = Linux::MemInfo::get_mem_info();
+    %meminfo = ( map { $_ => $lmi{$_} } 
+      qw(mem_total mem_free mem_buffers) );
+    $meminfo_type = 'Linux::MemInfo';
+    # mem_cached = Cached + SwapCached - we only want the former
+    $meminfo{mem_cached} = convert($lmi{Cached}, $lmi{CachedUnit}, 'B');
+    # The mem_* settings don't get set with newer kernels
+    $meminfo{mem_total}   ||= convert($lmi{MemTotal}, $lmi{MemTotalUnit}, 'B')
+      if $lmi{MemTotal};
+    $meminfo{mem_free}    ||= convert($lmi{MemFree},  $lmi{MemFreeUnit},  'B')
+      if $lmi{MemFree};
+    $meminfo{mem_buffers} ||= convert($lmi{Buffers},  $lmi{BuffersUnit},  'B')
+      if $lmi{Buffers};
+  };
+}
+unless (keys %meminfo) {
+  eval {
+    require Sys::MemInfo;
+    warn "WARNING: Sys::MemInfo < 0.05 has overflow problems - you should probably upgrade\n"
+      if $Sys::MemInfo::VERSION < 0.05;
+    %meminfo = ( 
+      mem_total => Sys::MemInfo::totalmem(), 
+      mem_free  => Sys::MemInfo::freemem(),
+    );
+    $meminfo_type = 'Sys::MemInfo';
+  };
+}
+$np->nagios_exit(UNKNOWN, 
+  "Cannot load memory info (Sys::MemInfo or Linux::MemInfo required)")
+    unless keys %meminfo;
+
+# Handle exclusions and calculate mem_used
+$meminfo{mem_free_orig} = $meminfo{mem_free};
+if ($opts->get('exclude-buffers') && $meminfo{mem_buffers}) {
+  $meminfo{mem_free} += $meminfo{mem_buffers};
+}
+if ($opts->get('exclude-cache') && $meminfo{mem_cached}) {
+  $meminfo{mem_free} += $meminfo{mem_cached};
+}
+$meminfo{mem_used} = $meminfo{mem_total} - $meminfo{mem_free};
+print "mode: $mode, meminfo ($meminfo_type): " . 
+  join(", ", map { "$_: " . $meminfo{$_} } sort keys %meminfo) .  "\n"
+    if $opts->verbose;
+
+# Add performance data
+$warning =  $warning  * $meminfo{mem_total} / 100 if $warning_pct;
+$critical = $critical * $meminfo{mem_total} / 100 if $critical_pct;
+$np->add_perfdata(
+  label => "mem_$mode",
+  value => $meminfo{"mem_$mode"},
+  uom => 'B',
+  warning => $warning,
+  critical => $critical,
+  min => 0,
+  max => $meminfo{mem_total}, 
+);
+
+# Do the check
+my $msg = sprintf "memory $mode: %dMB / %dMB (%.1f%%)",
+  convert($meminfo{"mem_$mode"}, 'B', 'MB'), 
+  convert($meminfo{mem_total}, 'B', 'MB'), 
+  $meminfo{"mem_$mode"} * 100 / $meminfo{mem_total};
+if ($mode eq 'free') {
+  $np->nagios_exit(CRITICAL, $msg) if $meminfo{"mem_$mode"} < $critical;
+  $np->nagios_exit(WARNING,  $msg) if $meminfo{"mem_$mode"} < $warning;
+} 
+else {
+  $np->nagios_exit(CRITICAL, $msg) if $meminfo{"mem_$mode"} > $critical;
+  $np->nagios_exit(WARNING,  $msg) if $meminfo{"mem_$mode"} > $warning;
+}
+$np->nagios_exit(OK, $msg);
+
+# vim:ft=perl:sw=2
+
+__END__
+
+TODO:
++ add perfdata
++ add --exclude-buffers and --exclude-cache flags on linux
+- add a test harness
+- use thresholds instead of manually testing
+- handle units on thresholds
+

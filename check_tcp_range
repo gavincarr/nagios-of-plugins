@@ -1,0 +1,73 @@
+#!/usr/bin/perl -w
+#
+# Nagios plugin to check a range/set of tcp ports on a host.
+#
+
+use strict;
+use File::Basename;
+use IO::Socket;
+use Nagios::Plugin::Getopt;
+use Nagios::Plugin::Functions 0.1301 qw(nagios_exit check_messages);
+
+# ----------------------------------------------------------------------------
+
+sub check_tcp { eval { IO::Socket::INET->new(join ':', @_) } }
+
+# ----------------------------------------------------------------------------
+# Main
+
+my $ng = Nagios::Plugin::Getopt->new(
+  usage => qq(Usage: %s -H <hostname> -p <ports> [-v]\n),
+  version => '0.2',
+  url => 'http://www.openfusion.com.au/labs/nagios/',
+  blurb => qq(This plugin tests arbitrary ranges/sets of tcp ports for a host.),
+);
+$ng->arg(
+  spec => "hostname|H=s",
+  help => q(-H, --hostname=ADDRESS
+   Host name or IP address), 
+  required => 1);
+$ng->arg(
+  spec => "ports|port|p=s", 
+  help => q(-p, --ports=STRING
+   Port numbers to check. Format: comma-separated, colons or hyphens for ranges, 
+   no spaces e.g. 8700:8705,8710-8715,8760 ), 
+  required => 1);
+$ng->getopts;
+
+alarm($ng->timeout);
+
+my @closed = ();
+my @open = ();
+for my $p (map { m/[-:]/ ? [ split /[-:]/, $_, 2 ] : $_ } split /,/, $ng->ports) {
+  if (ref $p eq 'ARRAY') {
+    for (my $i = $p->[0]; $i <= $p->[1]; $i++) {
+      if (check_tcp($ng->hostname, $i)) {
+        push @open, $i;
+      } else {
+        push @closed, $i;
+      }
+    }
+  }
+  else {
+    if (check_tcp($ng->hostname, $p)) {
+      push @open, $p;
+    } else {
+      push @closed, $p;
+    }
+  }
+}
+
+my $message = '';
+$message .= 'closed ports: ' . join(',',@closed) if @closed;
+$message .= ' :: ' if @closed && @open;
+$message .= 'open ports: '   . join(',',@open)   if @open;
+my $code = check_messages(
+  critical => \@closed, 
+  warning  => [],
+);  
+nagios_exit($code, $message);
+
+
+# arch-tag: 39277909-f754-4ede-99a6-d128d16dc07c
+# vim:ft=perl:ai:sw=2
