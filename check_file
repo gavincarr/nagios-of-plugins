@@ -155,11 +155,6 @@ for my $file (@{$ng->file}) {
     push @crit, "$file: does not exist";
     next;
   }
-  # Check readable
-  if (! -r $file) {
-    push @crit, "$file: cannot read";
-    next;
-  }
   my (@violations, @attr);
   # Check constraints
   if ($mtime || $size) {

@@ -1,7 +1,7 @@
 Summary: Additional Nagios plugins by Open Fusion
 Name: nagios-of-plugins
-Version: %{version}
-Release: 2.of
+Version: 0.9.3
+Release: 1.of
 License: GPL
 Group: Applications/System
 Source: http://www.openfusion.com.au/labs/dist/%{name}-%{version}.tar.gz
@@ -53,6 +53,9 @@ cp check* notify* $RPM_BUILD_ROOT/usr/lib/nagios/plugins
 %doc README
 
 %changelog
+
+* Thu Jun 21 2007 Gavin Carr <gavin@openfusion.com.au> 0.9.3-1
+- Remove overzealous check_file readability check.
 
 * Wed May 02 2007 Gavin Carr <gavin@openfusion.com.au> 0.9.2
 - Add glob support to check_daemontools_service.
