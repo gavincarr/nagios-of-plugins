@@ -13,8 +13,7 @@ Requires: bash
 Requires: perl
 Requires: nagios-plugins
 AutoReq: no
-# This is a noarch package
-ExcludeArch: i386, i686, x86_64
+BuildArch: noarch
 
 %description
 This package contains additional plugins for the Nagios monitoring system,
