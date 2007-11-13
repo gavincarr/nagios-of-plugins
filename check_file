@@ -14,7 +14,7 @@ use Nagios::Plugin 0.1301;
 my $ng = Nagios::Plugin::Getopt->new(
   usage => q(Usage: %s -f /path/to/file [-m <mtime>] [-s <size>] 
          [-r <regex>] [-e <error-regex>] [-i] [-t timeout] [-v]),
-  version => '0.04',
+  version => '0.05',
   url => 'http://www.openfusion.com.au/labs/nagios/',
   blurb => q(This plugin checks various constraints on a given file.),
   extra => qq(MTIME and SIZE may be specified using common units e.g. 30s, 30m, 30h, 30d
@@ -183,20 +183,25 @@ for my $file (@{$ng->file}) {
      
     # Check regexes
     my $ic = $ng->get('ignore-case') ? '(?i)' : '';
-    for my $regex (@{$ng->regex}) {
-      if ($content =~ m/$ic$regex/) {
-        push @attr, "regex /$regex/ matches";
-     }
-     else {
-        push @violations, "no match for regex /$regex/";
+    if ($ng->regex && ref $ng->regex eq 'ARRAY') {
+      for my $regex (@{$ng->regex}) {
+        if ($content =~ m/$ic$regex/) {
+          push @attr, "regex /$regex/ matches";
+        }
+        else {
+          push @violations, "no match for regex /$regex/";
+        }
       }
     }
-    for my $error (@{$ng->error}) {
-      if ($content =~ m/$ic$error/) {
-        push @violations, "error regex /$error/ matches";
-      }
-      else {
-        push @attr, "no match for error regex /$error/";
+    my $error_regex = $ng->get('error_regex');
+    if ($error_regex && ref $error_regex eq 'ARRAY') {
+      for my $error (@$error_regex) {
+        if ($content =~ m/$ic$error/) {
+          push @violations, "error regex /$error/ matches";
+        }
+        else {
+          push @attr, "no match for error regex /$error/";
+        }
       }
     }
   }
