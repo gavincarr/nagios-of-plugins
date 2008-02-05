@@ -11,7 +11,7 @@ use Nagios::Plugin 0.1301;
 
 my $ng = Nagios::Plugin::Getopt->new(
   usage => qq(Usage: %s [--pkg <pkgmgr>] [-v]),
-  version => '0.04',
+  version => '0.05',
   url => 'http://www.openfusion.com.au/labs/nagios/',
   blurb => qq(This plugin checks whether a newer linux kernel package is available.),
 );
@@ -64,6 +64,7 @@ if (lc $ng->pkg eq 'rpm') {
   my $kernel = 'kernel';
   $kernel .= '-smp' if $CURRENT =~ m/smp$/;
   $kernel .= '-xen' if $CURRENT =~ m/xen$/;
+  $kernel .= '-PAE' if $CURRENT =~ m/PAE$/;
   $AVAILABLE = "rpm -q $kernel";
   $prefix = "$kernel-";
 }
