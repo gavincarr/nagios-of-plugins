@@ -7,10 +7,7 @@
 #
 
 use strict;
-use Net::Jabber qw(Client) ;
-use Net::Jabber qw(Message) ;
-use Net::Jabber qw(Protocol) ;
-use Net::Jabber qw(Presence) ;
+use Net::XMPP;
 use File::Basename;
 use Config::Tiny;
 
@@ -47,7 +44,7 @@ my $SERVER   = $conf->{$me}->{jabber_server}   || $conf->{_}->{jabber_server}   
 my $PORT     = $conf->{$me}->{jabber_port}     || $conf->{_}->{jabber_port}     || 5222;
 my $RESOURCE = $conf->{$me}->{jabber_resource} || $conf->{_}->{jabber_resource} || 'nagios';
 
-my $connection = Net::Jabber::Client->new();
+my $connection = Net::XMPP::Client->new();
 $connection->Connect(hostname => $SERVER, port => $PORT, connectiontype => 'http', tls => 1) 
   or die "Cannot connect ($!)\n";
 
@@ -55,11 +52,10 @@ my @result = $connection->AuthSend(username => $USER, password => $PASS, resourc
 die "Ident/Auth with server failed: $result[0] - $result[1]\n" unless $result[0] eq "ok";
 
 foreach my $r ( @rcpt ) {
-   my $message = Net::Jabber::Message->new();
+   my $message = Net::XMPP::Message->new();
    $message->SetMessage( 
+     type 	  => 'chat',
      to           => $r,
-     subject      => "Notification",
-     type         => "chat",
      body         => $msg);
    $connection->Send($message);
    sleep 1;
@@ -68,4 +64,3 @@ foreach my $r ( @rcpt ) {
 $connection->Disconnect();
 
 
-# arch-tag: 918b1bf8-1c6c-4949-9619-801cd32eb6cf
