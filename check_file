@@ -5,13 +5,25 @@
 # Returns CRITICAL if any of the asserted constraints fail.
 # Intended for checking cron job output, for instance.
 #
+# Note: this is written as an executable OO-module because I want to be able
+# to reuse the functionality in other plugins e.g. see 'check_newest_file'
+#
+
+package check_file;
 
 use strict;
 use File::Basename;
 use Nagios::Plugin::Getopt;
 use Nagios::Plugin 0.1301;
 
-my $ng = Nagios::Plugin::Getopt->new(
+sub new {
+  my $class = shift;
+  bless {}, $class;
+}
+
+sub getopts {
+  my $self = shift;
+  my $ng = Nagios::Plugin::Getopt->new(
   usage => q(Usage: %s -f /path/to/file [-m <mtime>] [-s <size>] 
          [-r <regex>] [-e <error-regex>] [-i] [-t timeout] [-v]),
   version => '0.05',
@@ -28,28 +40,30 @@ indicates the given value must be greater than or equal to the given
 constraint.),
 );
 
-$ng->arg(
+  $ng->arg(
   spec => "file|f=s@",
   help => q(-f, --file=PATH
    File to check (may be repeated)),
   required => 1);
-$ng->arg("mtime|m=s",
+  $ng->arg("mtime|m=s",
   q(-m, --mtime=MTIME
    Modification time of file (default: maximum age in seconds)));
-$ng->arg("size|s=s",
+  $ng->arg("size|s=s",
   q(-s, --size=SIZE
    Size of file (default: minimum size in bytes)));
-$ng->arg("regex|r=s@",
+  $ng->arg("regex|r=s@",
   q(-r, --regex=REGEX
    Regex that should be found in file (may be repeated)));
-$ng->arg("error-regex|e=s@",
+  $ng->arg("error-regex|e=s@",
   q(-e, --error-regex=REGEX
    Regex that should NOT be found in file (may be repeated)));
-$ng->arg("ignore-case|i",
+  $ng->arg("ignore-case|i",
   q(-i, --ignore-case
    Ignore case in regex tests));
 
-$ng->getopts;
+  $ng->getopts;
+  $self->{ng} = $ng;
+}
 
 # ----------------------------------------------------------------------------
 # Subroutines
@@ -64,6 +78,7 @@ $TMULT{$_} = 3600 * 24 foreach qw(d day days);
 #   e.g. 33s, 33sec, 33secs, 33m, 33min, 33mins, 33h, 33d, etc.
 sub period_to_sec
 {
+  my $self = shift;
   my $t = shift;
   my $sec = 0;
   if ($t =~ m/^\s*([-+=]?)\s*(\d+(\.\d+)?)\s*([a-zA-Z]+)/ && $TMULT{lc $4}) {
@@ -85,6 +100,7 @@ $SMULT{$_} = 1000 * 1000 * 1000 foreach qw(g gb);
 # Convert size units designations to bytes
 sub size_to_bytes
 {
+  my $self = shift;
   my $s = shift;
   my $bytes = 0;
   if ($s =~ m/^\s*([-+=]?)\s*(\d+(\.\d+)?)\s*([a-zA-Z]+)/ && $SMULT{lc $4}) {
@@ -99,6 +115,7 @@ sub size_to_bytes
 # Decorate $value with the default $signum unless already decorated
 sub decorate
 {
+  my $self = shift;
   my ($value, $signum) = @_;
   return $value if ! $value || $value =~ m/^\s*[-+=]/;
   die "bad signum '$signum'" unless $signum =~ m/^[-+=]$/;
@@ -109,6 +126,7 @@ sub decorate
 # Return true if $value does NOT match signum-decorated $parameter (+ is >=, - is <, = is ==)
 sub violate
 {
+  my $self = shift;
   my ($value, $param) = @_;
   if ($param =~ m/^=(.*)/) {
     return $value != $1;
@@ -123,103 +141,116 @@ sub violate
 
 # ----------------------------------------------------------------------------
 
-my $np = Nagios::Plugin->new;
+sub run {
+  my $self = shift;
+  my $ng = $self->{ng};
+  my $np = Nagios::Plugin->new;
 
-# At least one of $size, $mtime, @regex, or @error must be set
-$np->nagios_die("nothing to check - no mtime, size, regex, or error regex checks found")
-    unless $ng->mtime || $ng->size || @{$ng->regex} || @{$ng->error};
+  # At least one of $size, $mtime, @regex, or @error must be set
+  $np->nagios_die("nothing to check - no mtime, size, regex, or error regex checks found")
+      unless $ng->mtime || $ng->size || @{$ng->regex} || @{$ng->error};
 
-my $mtime = $ng->mtime;
-my $size = $ng->size;
-if ($mtime) {
-  my $mtime_sec = period_to_sec($mtime);
-  $np->nagios_die("failed to parse mtime '$mtime'") unless $mtime_sec;
-  $mtime_sec = decorate($mtime_sec, '-');
-  print STDERR "+ $mtime converted to $mtime_sec\n" 
-    if $ng->verbose && $mtime ne $mtime_sec;
-  $mtime = $mtime_sec;
-}
-if ($size) {
-  my $size_bytes = size_to_bytes($size);
-  $np->nagios_die("failed to parse size '$size'") unless $size_bytes;
-  $size_bytes = decorate($size_bytes, '+');
-  print STDERR "+ $size converted to $size_bytes\n" 
-    if $ng->verbose && $size ne $size_bytes;
-  $size = $size_bytes;
-}
-
-my (@crit, @ok);
-for my $file (@{$ng->file}) {
-  # Check existence
-  if (! -e $file) {
-    push @crit, "$file: does not exist";
-    next;
+  my $mtime = $ng->mtime;
+  my $size = $ng->size;
+  if ($mtime) {
+    my $mtime_sec = $self->period_to_sec($mtime);
+    $np->nagios_die("failed to parse mtime '$mtime'") unless $mtime_sec;
+    $mtime_sec = $self->decorate($mtime_sec, '-');
+    print STDERR "+ $mtime converted to $mtime_sec\n" 
+      if $ng->verbose && $mtime ne $mtime_sec;
+    $mtime = $mtime_sec;
   }
-  my (@violations, @attr);
-  # Check constraints
-  if ($mtime || $size) {
-    my ($s, $m) = (stat $file)[7,9];
-    if ($mtime) {
-      my $age = time() - $m;
-      push @violations, "bad mtime (${age}s)" if violate($age, $mtime);
-      push @attr, "mtime ${age}s";
-    }
-    if ($size) {
-      push @violations, "bad size (${s}B)" if violate($s, $size);
-      push @attr, "size ${s}b";
-    }
+  if ($size) {
+    my $size_bytes = $self->size_to_bytes($size);
+    $np->nagios_die("failed to parse size '$size'") unless $size_bytes;
+    $size_bytes = $self->decorate($size_bytes, '+');
+    print STDERR "+ $size converted to $size_bytes\n" 
+      if $ng->verbose && $size ne $size_bytes;
+    $size = $size_bytes;
   }
-  if (($ng->regex && @{$ng->regex}) || 
-      ($ng->get('error_regex') && @{$ng->get('error_regex')})) {
-    # Slurp file contents
-    open FILE, "<$file" or 
-      $np->nagios_die("open on '$file' failed: $!");
-    my $content = '';
-    {
-      local $/ = undef;
-      $content = <FILE>;
+
+  my (@crit, @ok);
+  for my $file (@{$ng->file}) {
+    # Check existence
+    if (! -e $file) {
+      push @crit, "$file: does not exist";
+      next;
     }
-    close FILE;
-     
-    # Check regexes
-    my $ic = $ng->get('ignore-case') ? '(?i)' : '';
-    if ($ng->regex && ref $ng->regex eq 'ARRAY') {
-      for my $regex (@{$ng->regex}) {
-        if ($content =~ m/$ic$regex/) {
-          push @attr, "regex /$regex/ matches";
+    my (@violations, @attr);
+    # Check constraints
+    if ($mtime || $size) {
+      my ($s, $m) = (stat $file)[7,9];
+      if ($mtime) {
+        my $age = time() - $m;
+        push @violations, "bad mtime (${age}s)" if $self->violate($age, $mtime);
+        push @attr, "mtime ${age}s";
+      }
+      if ($size) {
+        push @violations, "bad size (${s}B)" if $self->violate($s, $size);
+        push @attr, "size ${s}b";
+      }
+    }
+    if (($ng->regex && @{$ng->regex}) || 
+        ($ng->get('error_regex') && @{$ng->get('error_regex')})) {
+      # Slurp file contents
+      open FILE, "<$file" or 
+        $np->nagios_die("open on '$file' failed: $!");
+      my $content = '';
+      {
+        local $/ = undef;
+        $content = <FILE>;
+      }
+      close FILE;
+      
+      # Check regexes
+      my $ic = $ng->get('ignore-case') ? '(?i)' : '';
+      if ($ng->regex && ref $ng->regex eq 'ARRAY') {
+        for my $regex (@{$ng->regex}) {
+          if ($content =~ m/$ic$regex/) {
+            push @attr, "regex /$regex/ matches";
+          }
+          else {
+            push @violations, "no match for regex /$regex/";
+          }
         }
-        else {
-          push @violations, "no match for regex /$regex/";
+      }
+      my $error_regex = $ng->get('error_regex');
+      if ($error_regex && ref $error_regex eq 'ARRAY') {
+        for my $error (@$error_regex) {
+          if ($content =~ m/$ic$error/) {
+            push @violations, "error regex /$error/ matches";
+          }
+          else {
+            push @attr, "no match for error regex /$error/";
+          }
         }
       }
     }
-    my $error_regex = $ng->get('error_regex');
-    if ($error_regex && ref $error_regex eq 'ARRAY') {
-      for my $error (@$error_regex) {
-        if ($content =~ m/$ic$error/) {
-          push @violations, "error regex /$error/ matches";
-        }
-        else {
-          push @attr, "no match for error regex /$error/";
-        }
-      }
+    if (@violations) {
+      push @crit, "$file: " . join(', ', @violations);
+    }
+    else {
+      my $ok = $file;
+      $ok .= sprintf " (%s)", join(', ', @attr) if @attr;
+      push @ok, $ok;
     }
   }
-  if (@violations) {
-    push @crit, "$file: " . join(', ', @violations);
-  }
-  else {
-    my $ok = $file;
-    $ok .= sprintf " (%s)", join(', ', @attr) if @attr;
-    push @ok, $ok;
-  }
+
+  my $message = join ' :: ', @crit;
+  $message .= '  OK: ' . join(', ', @ok) if @ok;
+  my $code = $np->check_messages(critical => \@crit);
+  $np->nagios_exit($code, $message);
 }
 
-my $message = join ' :: ', @crit;
-$message .= '  OK: ' . join(', ', @ok) if @ok;
-my $code = $np->check_messages(critical => \@crit);
-$np->nagios_exit($code, $message);
+# Magic to check if we're being called directly, rather than as a module
+unless (caller) {
+  package main;
+  my $self = check_file->new;
+  $self->getopts;
+  $self->run;
+}
 
+1;
 
 # arch-tag: 59479678-04b6-4a81-b99d-950f18f7c4ae
 # vim:ft=perl

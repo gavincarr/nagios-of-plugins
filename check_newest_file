@@ -1,0 +1,83 @@
+#!/usr/bin/perl -w
+#
+# check_newest_file - plugin to check various constraints on the newest
+#   file in one or more given directories. Implemented as a wrapper around
+#   the check_file plugin, so see that for details.
+#
+
+package check_newest_file;
+
+use strict;
+use Nagios::Plugin::Getopt;
+use Nagios::Plugin::Functions qw(nagios_die);
+
+
+use lib '.';
+require 'check_file';
+our @ISA;
+push @ISA, qw(check_file);
+
+use File::stat;
+
+sub getopts {
+  my $self = shift;
+  my $ng = Nagios::Plugin::Getopt->new(
+  usage => q(Usage: %s -d /path/to/directory [-m <mtime>] [-s <size>] 
+         [-r <regex>] [-e <error-regex>] [-i] [-t timeout] [-v]),
+  version => '0.01',
+  url => 'http://www.openfusion.com.au/labs/nagios/',
+  blurb => q(This plugin checks various constraints on the newest file in one or more directories.),
+  extra => qq(Implemented as a wrapper around check_file, so see that plugin for details.),
+  );
+
+  $ng->arg(
+  spec => "dir|d=s@",
+  help => q(-d, --dir=PATH
+   Directory within which to check newest file (may be repeated)),
+  required => 1);
+  $ng->arg("mtime|m=s",
+  q(-m, --mtime=MTIME
+   Modification time of file (default: maximum age in seconds)));
+  $ng->arg("size|s=s",
+  q(-s, --size=SIZE
+   Size of file (default: minimum size in bytes)));
+  $ng->arg("regex|r=s@",
+  q(-r, --regex=REGEX
+   Regex that should be found in file (may be repeated)));
+  $ng->arg("error-regex|e=s@",
+  q(-e, --error-regex=REGEX
+   Regex that should NOT be found in file (may be repeated)));
+  $ng->arg("ignore-case|i",
+  q(-i, --ignore-case
+   Ignore case in regex tests));
+  $ng->getopts;
+
+  # Find newest file in each directory
+  my @file;
+  for my $dir (@{$ng->dir}) {
+    nagios_die("Bad directory $dir") unless -d $dir;
+    my $new_mtime = -1;
+    my $new_file;
+    for my $file (glob("$dir/*")) {
+      next unless -f $file;
+      my $st = stat($file);
+      if ($st->mtime > $new_mtime) {
+        $new_mtime = $st->mtime;
+        $new_file = $file;
+      }
+    }
+    push @file, $new_file if $new_file;
+  }
+
+  # Setup required file arg for check_file
+  $ng->{file} = \@file;
+  $ng->mk_ro_accessors(qw(file));
+
+  $self->{ng} = $ng;
+}
+
+package main;
+my $self = check_newest_file->new;
+$self->getopts;
+$self->run;
+
