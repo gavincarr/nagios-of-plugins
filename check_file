@@ -15,6 +15,7 @@ use strict;
 use File::Basename;
 use Nagios::Plugin::Getopt;
 use Nagios::Plugin 0.1301;
+use Time::Piece;
 
 sub new {
   my $class = shift;
@@ -60,6 +61,9 @@ constraint.),
   $ng->arg("ignore-case|i",
   q(-i, --ignore-case
    Ignore case in regex tests));
+  $ng->arg("weekdays",
+  q(--weekdays
+   Tweak modification time tests to ignore weekends));
 
   $ng->getopts;
   $self->{ng} = $ng;
@@ -182,12 +186,20 @@ sub run {
       my ($s, $m) = (stat $file)[7,9];
       if ($mtime) {
         my $age = time() - $m;
+        if ($ng->weekdays) {
+          # If mtime takes you back beyond the current week, try and skip weekends
+          my $mtime_days = sprintf "%d", abs($mtime) / 86400;
+          if ($mtime_days && $mtime_days >= localtime->day_of_week) {
+            # TODO: this should really handle multiple weekends, not just one
+            $age -= 2 * 86400;
+          }
+        }
         push @violations, "bad mtime (${age}s)" if $self->violate($age, $mtime);
-        push @attr, "mtime ${age}s";
+        push @attr, "mtime ${age}s vs. $mtime";
       }
       if ($size) {
         push @violations, "bad size (${s}B)" if $self->violate($s, $size);
-        push @attr, "size ${s}b";
+        push @attr, "size ${s}b vs. $size";
       }
     }
     if (($ng->regex && @{$ng->regex}) || 

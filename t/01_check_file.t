@@ -34,7 +34,7 @@ sub check_file {
   $file = "$Bin/$file" unless $file =~ m!^/!;
   -f $file or die "Bad file '$file'";
   touch $file if $arg->{touch};
-  my @cmd = ( $cmd, "-f$file", $arg->{test} );
+  my @cmd = ( $cmd, '-f', $file, split(/\s+/, $arg->{test}) );
   my $out = '';
   run3 \@cmd, \undef, \$out, \$out;
   return $out;
@@ -96,10 +96,27 @@ test: -s362032
 ^FILE CRITICAL
 
 === size 4 (kB, small)
+--- LAST
 --- input check_file
 file: t01/services.old
-test: -s 400 kB
+test: -s 400kB
 
 --- output chomp regex
 ^FILE CRITICAL
+
+=== modtime weekdays 1
+--- input check_file
+file: t01/services.fri
+test: -m3d
+
+--- output chomp regex
+^FILE CRITICAL
+
+=== modtime weekdays 2
+--- input check_file
+file: t01/services.fri
+test: -m3d --weekdays
+
+--- output chomp regex
+^FILE OK
 
