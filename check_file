@@ -146,9 +146,9 @@ sub run {
   my $ng = $self->{ng};
   my $np = Nagios::Plugin->new;
 
-  # At least one of $size, $mtime, @regex, or @error must be set
+  # At least one of $size, $mtime, @regex, or @error-regex must be set
   $np->nagios_die("nothing to check - no mtime, size, regex, or error regex checks found")
-      unless $ng->mtime || $ng->size || @{$ng->regex} || @{$ng->error};
+      unless $ng->mtime || $ng->size || ($ng->regex && @{$ng->regex}) || ($ng->get('error-regex') && @{$ng->get('error-regex')});
 
   my $mtime = $ng->mtime;
   my $size = $ng->size;
