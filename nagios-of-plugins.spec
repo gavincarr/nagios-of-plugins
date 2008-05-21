@@ -1,6 +1,6 @@
 Summary: Additional Nagios plugins by Open Fusion
 Name: nagios-of-plugins
-Version: 0.9.5
+Version: 0.9.6
 Release: 1.of
 License: GPL
 Group: Applications/System
@@ -28,6 +28,7 @@ written by Gavin Carr of Open Fusion. It requires Nagios::Plugin from CPAN.
 - check_kernel_version
 - check_linux_raid
 - check_memory
+- check_newest_file
 - check_qmailq
 - check_tcp_range
 - check_up2date
@@ -53,13 +54,18 @@ cp check* notify* $RPM_BUILD_ROOT/usr/lib/nagios/plugins
 
 %changelog
 
-* Wed Feb 06 2008 Gavin Carr <gavin@openfusion.com.au> 0.9.5-1
+* Wed May 21 2008 Gavin Carr <gavin@openfusion.com.au> 0.9.6
+- Librify check_file plugin so it can be subclassed.
+- Add --workdays flag to check_file for workday-only mtime checks.
+- Add check_newest_file plugin, a wrapper around check_file.
+
+* Wed Feb 06 2008 Gavin Carr <gavin@openfusion.com.au> 0.9.5
 - Add kernel-xen support to check_kernel_version (Dennis Kuhlmeier)
 
-* Sun Jul 08 2007 Gavin Carr <gavin@openfusion.com.au> 0.9.4-1
+* Sun Jul 08 2007 Gavin Carr <gavin@openfusion.com.au> 0.9.4
 - Add kernel-PAE support to check_kernel_version (Dennis Kuhlmeier)
 
-* Thu Jun 21 2007 Gavin Carr <gavin@openfusion.com.au> 0.9.3-1
+* Thu Jun 21 2007 Gavin Carr <gavin@openfusion.com.au> 0.9.3
 - Remove overzealous check_file readability check.
 
 * Wed May 02 2007 Gavin Carr <gavin@openfusion.com.au> 0.9.2
