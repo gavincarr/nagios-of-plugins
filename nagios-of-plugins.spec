@@ -1,6 +1,6 @@
 Summary: Additional Nagios plugins by Open Fusion
 Name: nagios-of-plugins
-Version: 0.9.6
+Version: 0.9.7
 Release: 1.of
 License: GPL
 Group: Applications/System
@@ -53,6 +53,10 @@ cp check* notify* $RPM_BUILD_ROOT/usr/lib/nagios/plugins
 %doc README
 
 %changelog
+
+* Thu May 22 2008 Gavin Carr <gavin@openfusion.com.au> 0.9.7
+- Use FindBin to set use lib properly in check_newest_file.
+- Add -d glob support to check_newest_file.
 
 * Wed May 21 2008 Gavin Carr <gavin@openfusion.com.au> 0.9.6
 - Librify check_file plugin so it can be subclassed.

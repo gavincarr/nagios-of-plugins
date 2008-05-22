@@ -10,9 +10,9 @@ package check_newest_file;
 use strict;
 use Nagios::Plugin::Getopt;
 use Nagios::Plugin::Functions qw(nagios_die);
+use FindBin qw($Bin);
 
-
-use lib '.';
+use lib $Bin;
 require 'check_file';
 our @ISA;
 push @ISA, qw(check_file);
@@ -24,7 +24,7 @@ sub getopts {
   my $ng = Nagios::Plugin::Getopt->new(
   usage => q(Usage: %s -d /path/to/directory [-m <mtime>] [-s <size>] 
          [-r <regex>] [-e <error-regex>] [-i] [-t timeout] [-v]),
-  version => '0.01',
+  version => '0.02',
   url => 'http://www.openfusion.com.au/labs/nagios/',
   blurb => q(This plugin checks various constraints on the newest file in one or more directories.),
   extra => qq(Implemented as a wrapper around check_file, so see that plugin for details.),
@@ -33,7 +33,7 @@ sub getopts {
   $ng->arg(
   spec => "dir|d=s@",
   help => q(-d, --dir=PATH
-   Directory within which to check newest file (may be repeated)),
+   Directory within which to check newest file (may be glob, may be repeated)),
   required => 1);
   $ng->arg("mtime|m=s",
   q(-m, --mtime=MTIME
@@ -50,11 +50,20 @@ sub getopts {
   $ng->arg("ignore-case|i",
   q(-i, --ignore-case
    Ignore case in regex tests));
+  $ng->arg("weekdays",
+  q(--weekdays
+   Tweak modification time tests to ignore weekends));
   $ng->getopts;
 
   # Find newest file in each directory
   my @file;
-  for my $dir (@{$ng->dir}) {
+  my @dir = @{ $ng->dir };
+  while (my $dir = shift @dir) {
+    # Allow $dir to be a glob
+    if ($dir =~ m/[*?]/) {
+      push @dir, glob $dir;
+      next;
+    }
     nagios_die("Bad directory $dir") unless -d $dir;
     my $new_mtime = -1;
     my $new_file;
