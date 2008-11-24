@@ -21,6 +21,11 @@ $np->add_arg(
   help => qq(-m, --mountpoint=STRING
    Mountpoint on which given file/directory should be located.),
   required => 1);
+$np->add_arg(
+  spec => "quiet|q",
+  help => qq(-q, --quiet
+   Don't give warnings on non-existent paths and broken links.),
+  required => 1);
 
 $np->getopts;
 my $mountpoint = $np->opts->mountpoint;
