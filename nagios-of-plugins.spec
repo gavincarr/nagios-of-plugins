@@ -22,13 +22,13 @@ written by Gavin Carr of Open Fusion. It requires Nagios::Plugin from CPAN.
 - check_daemontools_service
 - check_db_query_rowcount
 - check_file
-- check_file_mountpoint
 - check_grep
 - check_inodes
 - check_ipmi_sdr
 - check_kernel_version
 - check_linux_raid
 - check_memory
+- check_mountpoint
 - check_newest_file
 - check_qmailq
 - check_tcp_range

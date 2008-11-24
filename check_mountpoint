@@ -10,7 +10,7 @@ use Nagios::Plugin;
 use File::Mountpoint qw(is_mountpoint);
 
 my $np = Nagios::Plugin->new(
-  usage => q(Usage: %s [-v] -m <mountpoint> <file1> [<file2> ...]),
+  usage => q(Usage: %s [-v] -m <mountpoint> <path1> [<path2> ...]),
   version => '0.01',
   url => 'http://www.openfusion.com.au/labs/nagios/',
   blurb => q(This plugin checks the mountpoint of a given file/directory.),
@@ -25,7 +25,7 @@ $np->add_arg(
 $np->getopts;
 my $mountpoint = $np->opts->mountpoint;
 
-$np->die("No files/directories found to check\n") 
+$np->die("No paths found to check\n") 
   unless @ARGV;
 $np->die("Mountpoint '$mountpoint' does not exist\n") 
   unless -e $mountpoint;
