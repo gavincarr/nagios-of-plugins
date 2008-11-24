@@ -1,0 +1,72 @@
+#!/usr/bin/perl -w
+#
+# Nagios plugin to check the mountpoint/partition a given file or 
+# directory is on
+# 
+
+use strict;
+use File::Basename;
+use Nagios::Plugin;
+use File::Mountpoint qw(is_mountpoint);
+
+my $np = Nagios::Plugin->new(
+  usage => q(Usage: %s [-v] -m <mountpoint> <file1> [<file2> ...]),
+  version => '0.01',
+  url => 'http://www.openfusion.com.au/labs/nagios/',
+  blurb => q(This plugin checks the mountpoint of a given file/directory.),
+);
+
+$np->add_arg(
+  spec => "mountpoint|m=s",
+  help => qq(-m, --mountpoint=STRING
+   Mountpoint on which given file/directory should be located.),
+  required => 1);
+
+$np->getopts;
+my $mountpoint = $np->opts->mountpoint;
+
+$np->die("No files/directories found to check\n") 
+  unless @ARGV;
+$np->die("Mountpoint '$mountpoint' does not exist\n") 
+  unless -e $mountpoint;
+$np->die("Mountpoint '$mountpoint' is not a mountpoint\n") 
+  unless -d $mountpoint && ! -l $mountpoint && is_mountpoint($mountpoint);
+
+# Check the given path, returning true if on the given mountpoint, false if not,
+# and dying on error
+sub check_path_mountpoint {
+  my ($mountpoint, $path) = @_;
+
+  die "Not found: $path\n" unless -e $path;
+
+  # If a symlink, set path to target
+  if (-l $path) {
+    my $target = readlink $path;
+    die "Broken link: '$path' points to non-existent '$target'\n"
+      unless -e $target;
+    $path = $target;
+  }
+  # If not a symlink, return if a mountpoint, otherwise check next level up
+  else {
+    if (-d $path && is_mountpoint($path)) {
+      return $path eq $mountpoint;
+    }
+    $path = dirname $path;
+  }
+  return check_path_mountpoint($mountpoint, $path);
+}
+
+for my $path ( @ARGV ) {
+  my $on_mountpoint = eval { check_path_mountpoint($mountpoint, $path) };
+  if ($@) {
+    $np->add_message( WARNING, $@ );
+  }
+  else {
+    $np->add_message( $on_mountpoint ? OK : CRITICAL, $path );
+  }
+}
+
+$np->nagios_exit( 
+  $np->check_messages( ok => "Mounted on $mountpoint:" ) 
+);
+

@@ -1,8 +1,14 @@
 
 + add glob support to check_daemontools_service (but must expand to just one)
 
+- add --test support to check_file (and cnf) to allow arbitrary perl tests
+- add --glob support to check_newest_file to limit file matches
+- add --count support to check_newest_file to check N newest files
+
 - allow check_daemontools_service to check on multiple services, rather than just one
 - add range support to check_daemontools_service, to allow warning on max uptime, not just minimum
+
+
 
 
 

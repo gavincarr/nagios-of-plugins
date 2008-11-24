@@ -1,6 +1,6 @@
 Summary: Additional Nagios plugins by Open Fusion
 Name: nagios-of-plugins
-Version: 0.9.7
+Version: 0.9.8
 Release: 1.of
 License: GPL
 Group: Applications/System
@@ -22,6 +22,7 @@ written by Gavin Carr of Open Fusion. It requires Nagios::Plugin from CPAN.
 - check_daemontools_service
 - check_db_query_rowcount
 - check_file
+- check_file_mountpoint
 - check_grep
 - check_inodes
 - check_ipmi_sdr
@@ -34,7 +35,7 @@ written by Gavin Carr of Open Fusion. It requires Nagios::Plugin from CPAN.
 - check_up2date
 - check_yum
 
-See the relevant plugin's -h output for usage details.
+See individual plugin -h output for usage details.
 
 %prep
 %setup
@@ -53,6 +54,9 @@ cp check* notify* $RPM_BUILD_ROOT/usr/lib/nagios/plugins
 %doc README
 
 %changelog
+
+* Thu May 22 2008 Gavin Carr <gavin@openfusion.com.au> 0.9.8
+- Add check_file_mountpoint plugin.
 
 * Thu May 22 2008 Gavin Carr <gavin@openfusion.com.au> 0.9.7
 - Use FindBin to set use lib properly in check_newest_file.
