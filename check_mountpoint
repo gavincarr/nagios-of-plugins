@@ -10,7 +10,7 @@ use Nagios::Plugin;
 use File::Mountpoint qw(is_mountpoint);
 
 my $np = Nagios::Plugin->new(
-  usage => q(Usage: %s [-v] -m <mountpoint> <path1> [<path2> ...]),
+  usage => q(Usage: %s [-v] [--missing-ok] -m <mountpoint> <path1> [<path2> ...]),
   version => '0.01',
   url => 'http://www.openfusion.com.au/labs/nagios/',
   blurb => q(This plugin checks the mountpoint of a given file/directory.),
@@ -22,10 +22,10 @@ $np->add_arg(
    Mountpoint on which given file/directory should be located.),
   required => 1);
 $np->add_arg(
-  spec => "quiet|q",
-  help => qq(-q, --quiet
-   Don't give warnings on non-existent paths and broken links.),
-  required => 1);
+  spec => "missing-ok",
+  help => qq(--missing-ok
+   Don't give warnings on non-existent paths.),
+  required => 0);
 
 $np->getopts;
 my $mountpoint = $np->opts->mountpoint;
@@ -42,13 +42,15 @@ $np->die("Mountpoint '$mountpoint' is not a mountpoint\n")
 sub check_path_mountpoint {
   my ($mountpoint, $path) = @_;
 
-  die "Not found: $path\n" unless -e $path;
+  if (! -e $path) {
+    die "Not found: $path\n" unless $np->opts->get('missing-ok');
+    return 1;
+  }
 
   # If a symlink, set path to target
   if (-l $path) {
     my $target = readlink $path;
-    die "Broken link: '$path' points to non-existent '$target'\n"
-      unless -e $target;
+    die "Broken link: '$path' points to non-existent '$target'\n" unless -e $target;
     $path = $target;
   }
   # If not a symlink, return if a mountpoint, otherwise check next level up
@@ -61,17 +63,29 @@ sub check_path_mountpoint {
   return check_path_mountpoint($mountpoint, $path);
 }
 
+my (@ok, @warning, @critical);
 for my $path ( @ARGV ) {
   my $on_mountpoint = eval { check_path_mountpoint($mountpoint, $path) };
   if ($@) {
-    $np->add_message( WARNING, $@ );
+    chomp $@;
+    push @warning, $@;
   }
   else {
-    $np->add_message( $on_mountpoint ? OK : CRITICAL, $path );
+    if ($on_mountpoint) {
+      push @ok, $path;
+    } else {
+      push @critical, $path;
+    }
   }
 }
 
-$np->nagios_exit( 
-  $np->check_messages( ok => "Mounted on $mountpoint:" ) 
-);
+if (@critical) {
+  $np->nagios_exit( CRITICAL => "Not on mountpoint $mountpoint: " . join(' ', @critical) );
+} 
+elsif (@warning) {
+  $np->nagios_exit( WARNING => join(', ', @warning) );
+}
+else {
+  $np->nagios_exit( OK => "Mounted on $mountpoint: " . join(' ', @ok) );
+}
 
