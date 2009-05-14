@@ -30,7 +30,8 @@ sub getopts {
   version => '0.05',
   url => 'http://www.openfusion.com.au/labs/nagios/',
   blurb => q(This plugin checks various constraints on a given file.),
-  extra => qq(MTIME and SIZE may be specified using common units e.g. 30s, 30m, 30h, 30d
+  extra => qq(
+MTIME and SIZE may be specified using common units e.g. 30s, 30m, 30h, 30d
 for MTIME, and 30B, 30K, 30KB, 30MB, 30G for SIZE.
 
 MTIME and SIZE parameters may also have a prefixing modifier sign indicating 
@@ -44,7 +45,7 @@ constraint.),
   $ng->arg(
   spec => "file|f=s@",
   help => q(-f, --file=PATH
-   File to check (may be repeated)),
+   File to check (may be repeated, and/or may be a glob)),
   required => 1);
   $ng->arg("mtime|m=s",
   q(-m, --mtime=MTIME
@@ -150,10 +151,6 @@ sub run {
   my $ng = $self->{ng};
   my $np = Nagios::Plugin->new;
 
-  # At least one of $size, $mtime, @regex, or @error-regex must be set
-  $np->nagios_die("nothing to check - no mtime, size, regex, or error regex checks found")
-      unless $ng->mtime || $ng->size || ($ng->regex && @{$ng->regex}) || ($ng->get('error-regex') && @{$ng->get('error-regex')});
-
   my $mtime = $ng->mtime;
   my $size = $ng->size;
   if ($mtime) {
@@ -174,8 +171,14 @@ sub run {
   }
 
   my (@crit, @ok);
-  for my $file (@{$ng->file}) {
-    # Check existence
+  while (my $file = shift @{$ng->file}) {
+    # $file may be a glob, which we should expand, and which should yield >= 1 filenames
+    if ($file =~ m/[*?]/) {
+      my @file = @{$ng->file}, glob $file;
+      push @crit, "glob $file does not match any files";
+      next;
+    }
+    # Check existence of $file
     if (! -e $file) {
       push @crit, "$file: does not exist";
       next;
@@ -248,8 +251,8 @@ sub run {
     }
   }
 
-  my $message = join ' :: ', @crit;
-  $message .= '  OK: ' . join(', ', @ok) if @ok;
+  my $message = @crit ? join(' :: ', @crit) . '  ' : '';
+  $message .= 'OK: ' . join(', ', @ok) if @ok;
   my $code = $np->check_messages(critical => \@crit);
   $np->nagios_exit($code, $message);
 }
