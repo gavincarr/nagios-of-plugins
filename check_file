@@ -25,8 +25,8 @@ sub new {
 sub getopts {
   my $self = shift;
   my $ng = Nagios::Plugin::Getopt->new(
-  usage => q(Usage: %s -f /path/to/file [-m <mtime>] [-s <size>] 
-         [-r <regex>] [-e <error-regex>] [-i] [-t timeout] [-v]),
+  usage => q(Usage: %s [-v] [-i] [-m <mtime>] [-s <size>] 
+         [-r <regex>] [-e <error-regex>] [-f] /path/to/file [/path/to/file2 ...]),
   version => '0.05',
   url => 'http://www.openfusion.com.au/labs/nagios/',
   blurb => q(This plugin checks various constraints on a given file.),
@@ -46,7 +46,7 @@ constraint.),
   spec => "file|f=s@",
   help => q(-f, --file=PATH
    File to check (may be repeated, and/or may be a glob)),
-  required => 1);
+  default => []);
   $ng->arg("mtime|m=s",
   q(-m, --mtime=MTIME
    Modification time of file (default: maximum age in seconds)));
@@ -67,6 +67,9 @@ constraint.),
    Tweak modification time tests to ignore weekends));
 
   $ng->getopts;
+
+  push @{$ng->file}, @ARGV if @ARGV;
+
   $self->{ng} = $ng;
 }
 
@@ -150,6 +153,8 @@ sub run {
   my $self = shift;
   my $ng = $self->{ng};
   my $np = Nagios::Plugin->new;
+
+  $np->die("Required arguments missing: file") unless $ng->file && @{$ng->file};
 
   my $mtime = $ng->mtime;
   my $size = $ng->size;

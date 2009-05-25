@@ -1,6 +1,6 @@
 Summary: Additional Nagios plugins by Open Fusion
 Name: nagios-of-plugins
-Version: 0.9.10
+Version: 0.9.11
 Release: 1.of
 License: GPL
 Group: Applications/System
@@ -54,6 +54,9 @@ cp check* notify* $RPM_BUILD_ROOT/usr/lib/nagios/plugins
 %doc README
 
 %changelog
+
+* Mon May 25 2009 Gavin Carr <gavin@openfusion.com.au> 0.9.11
+- Make check_file include @ARGV in file list.
 
 * Thu May 14 2009 Gavin Carr <gavin@openfusion.com.au> 0.9.10
 - Add glob support to check_file plugin.
