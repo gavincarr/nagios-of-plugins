@@ -202,12 +202,12 @@ sub run {
             $age -= 2 * 86400;
           }
         }
-        push @violations, "bad mtime (${age}s)" if $self->violate($age, $mtime);
+        push @violations, "bad mtime (${age}s vs. $mtime)" if $self->violate($age, $mtime);
         push @attr, "mtime ${age}s vs. $mtime";
       }
       if ($size) {
-        push @violations, "bad size (${s}B)" if $self->violate($s, $size);
-        push @attr, "size ${s}b vs. $size";
+        push @violations, "bad size (${s}B vs. $size)" if $self->violate($s, $size);
+        push @attr, "size ${s}B vs. $size";
       }
     }
     if (($ng->regex && @{$ng->regex}) || 
