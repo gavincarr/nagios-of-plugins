@@ -17,7 +17,8 @@ my $ng = Nagios::Plugin::Getopt->new(
   blurb => q(This plugin checks the status of linux mdstat raid partitions.),
 );
 $ng->arg("errors-only|e", 
-  qq(-e, --errors-only\n Display only devices with errors));
+  qq(-e, --errors-only
+   Display only devices with errors));
 $ng->getopts;
 
 my $np = Nagios::Plugin->new;
