@@ -179,8 +179,12 @@ sub run {
   while (my $file = shift @{$ng->file}) {
     # $file may be a glob, which we should expand, and which should yield >= 1 filenames
     if ($file =~ m/[*?]/) {
-      my @file = @{$ng->file}, glob $file;
-      push @crit, "glob $file does not match any files";
+      if (my @file = glob $file) {
+        unshift @{$ng->file}, @file;
+      }
+      else {
+        push @crit, "glob $file does not match any files";
+      }
       next;
     }
     # Check existence of $file
