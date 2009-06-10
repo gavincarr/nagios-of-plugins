@@ -1,6 +1,6 @@
 Summary: Additional Nagios plugins by Open Fusion
 Name: nagios-of-plugins
-Version: 0.9.11
+Version: 0.9.12
 Release: 1.of
 License: GPL
 Group: Applications/System

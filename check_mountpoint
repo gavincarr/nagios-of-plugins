@@ -30,11 +30,11 @@ $np->add_arg(
 $np->getopts;
 my $mountpoint = $np->opts->mountpoint;
 
-$np->die("No paths found to check\n") 
+$np->nagios_die("No paths found to check\n") 
   unless @ARGV;
-$np->die("Mountpoint '$mountpoint' does not exist\n") 
+$np->nagios_die("Mountpoint '$mountpoint' does not exist\n", CRITICAL) 
   unless -e $mountpoint;
-$np->die("Mountpoint '$mountpoint' is not a mountpoint\n") 
+$np->nagios_die("Mountpoint '$mountpoint' is not a mountpoint\n", CRITICAL) 
   unless -d $mountpoint && ! -l $mountpoint && is_mountpoint($mountpoint);
 
 # Check the given path, returning true if on the given mountpoint, false if not,
@@ -43,14 +43,16 @@ sub check_path_mountpoint {
   my ($mountpoint, $path) = @_;
 
   if (! -e $path) {
-    die "Not found: $path\n" unless $np->opts->get('missing-ok');
+    $np->nagios_die("Not found: $path\n", CRITICAL) 
+      unless $np->opts->get('missing-ok');
     return 1;
   }
 
   # If a symlink, set path to target
   if (-l $path) {
     my $target = readlink $path;
-    die "Broken link: '$path' points to non-existent '$target'\n" unless -e $target;
+    $np->nagios_die("Broken link: '$path' points to non-existent '$target'", CRITICAL)
+      unless -e $target;
     $path = $target;
   }
   # If not a symlink, return if a mountpoint, otherwise check next level up
