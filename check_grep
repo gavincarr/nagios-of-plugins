@@ -32,6 +32,10 @@ $ng->arg(
   spec => 'invert|invert-match',
   help => q(Invert sense of match i.e. return CRITICAL if regex is found, OK otherwise.),
 );
+$ng->arg(
+  spec => 'unescape|unescape-cmd',
+  help => q(URI-unescape command (to allow passing multi-word commands without spaces)),
+);
 $ng->getopts;
 
 my $np = Nagios::Plugin->new;
@@ -45,6 +49,11 @@ alarm($ng->timeout);
 
 my $data = '';
 if (my $cmd = $ng->command) {
+  if ($ng->unescape) {
+    require URI::Escape;
+    $cmd = URI::Escape::uri_unescape($cmd);
+    $cmd =~ s/\+/ /g;
+  }
   $data = qx($cmd);
 }
 else {
