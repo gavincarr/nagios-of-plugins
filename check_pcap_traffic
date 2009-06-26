@@ -7,6 +7,7 @@ use strict;
 use File::Basename;
 use IO::Socket;
 use Nagios::Plugin;
+use Time::HiRes qw(time);
 use Net::Pcap qw(:functions);
 
 # ----------------------------------------------------------------------------
@@ -56,6 +57,9 @@ if (pcap_lookupnet($int, \$network, \$netmask, \$err) < 0) {
 # Instantiate $pcap
 my $pcap = pcap_open_live($int, 20, 0, 1000, \$err)
   or $np->nagios_die("Cannot open interface $int: $err\n");
+my $pcap_fd = pcap_get_selectable_fd($pcap);
+my $pcap_fd_rin = '';
+vec($pcap_fd_rin, $pcap_fd, 1) = 1;
 
 # Add filter
 my $filter;
@@ -74,9 +78,12 @@ my $start = time;
 my $interval = $np->opts->interval;
 
 while (1) {
+  # Count the currently available packets
   pcap_dispatch($pcap, 0, sub { $count++ }, {});
   last if time - $start >= $interval;
-  sleep 1;
+
+  # Select on the pcap_fd until more packets come in 
+  select($pcap_fd_rin, undef, undef, 250);
 }
 
 $np->nagios_exit( CRITICAL, "No packets captured matching filter '$filter_str' on interface $int" )
