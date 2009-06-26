@@ -7,14 +7,13 @@ use strict;
 use File::Basename;
 use IO::Socket;
 use Nagios::Plugin;
-use Time::HiRes qw(time);
 use Net::Pcap qw(:functions);
 
 # ----------------------------------------------------------------------------
 # Main
 
 my $np = Nagios::Plugin->new(
-  usage => qq(Usage: %s [-v] [-i <interface>] [--interval <secs>] <pcap_filter>\n),
+  usage => qq(Usage: %s [-v] [-i <interface>] [--timeout <secs>] <pcap_filter>\n),
   version => '0.1',
   url => 'http://www.openfusion.com.au/labs/nagios/',
   blurb => qq/This plugin tests for arbitrary interface traffic using pcap./,
@@ -25,11 +24,6 @@ $np->add_arg(
   help => q(-i, --interface=STRING
    Interface on which to listen. Default: 'any'),
   default => 'any');
-$np->add_arg(
-  spec => "interval|I=i", 
-  help => q(-I, --interval=SECONDS
-   Length of time to listen on interface, in seconds. Default: 5), 
-  default => 5);
 $np->add_arg(
   spec => "warning|w=s",
   help => q(-w, --warning=RANGE
@@ -44,8 +38,6 @@ $np->getopts;
 
 $np->nagios_die("No pcap filter expression found") unless @ARGV;
 my $filter_str = join(' ', @ARGV);
-
-alarm($np->opts->timeout);
 
 # Lookup 
 my ($network, $netmask, $err);
@@ -74,31 +66,32 @@ if (pcap_setnonblock($pcap, 1, \$err) < 0) {
 }
 
 my $count = 0;
-my $start = time;
-my $interval = $np->opts->interval;
+alarm($np->opts->timeout);
+
+# Return results in ALRM handler
+$SIG{ALRM} = sub {
+  $np->nagios_exit( CRITICAL, "No packets captured matching filter '$filter_str' on interface $int" )
+    if $count == 0;
+
+  # If used with thresholds, compare $count against them
+  my $result = OK;
+  if ($np->opts->critical || $np->opts->warning) {
+    $result = $np->check_threshold( $count );
+  }
+
+  $np->nagios_exit(
+    return_code   => $result,
+    message       => "$count packet(s) captured matching filter '$filter_str' on interface $int",
+  );
+};
 
 while (1) {
   # Count the currently available packets
   pcap_dispatch($pcap, 0, sub { $count++ }, {});
-  last if time - $start >= $interval;
 
   # Select on the pcap_fd until more packets come in 
   select($pcap_fd_rin, undef, undef, 250);
 }
-
-$np->nagios_exit( CRITICAL, "No packets captured matching filter '$filter_str' on interface $int" )
-  if $count == 0;
-
-# If used with thresholds, compare $count against them
-my $result = OK;
-if ($np->opts->critical || $np->opts->warning) {
-  $result = $np->check_threshold( $count );
-}
-
-$np->nagios_exit(
-  return_code   => $result,
-  message       => "$count packet(s) captured matching filter '$filter_str' on interface $int",
-);
 
 
 # vim:ft=perl:ai:sw=2
