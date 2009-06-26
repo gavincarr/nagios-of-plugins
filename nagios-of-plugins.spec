@@ -1,6 +1,6 @@
 Summary: Additional Nagios plugins by Open Fusion
 Name: nagios-of-plugins
-Version: 0.9.13
+Version: 0.9.14
 Release: 1.of
 License: GPL
 Group: Applications/System
@@ -54,6 +54,9 @@ cp check* notify* $RPM_BUILD_ROOT/usr/lib/nagios/plugins
 %doc README
 
 %changelog
+
+* Fri Jun 12 2009 Gavin Carr <gavin@openfusion.com.au> 0.9.14
+- Add --unescape argument to check_grep.
 
 * Wed Jun 10 2009 Gavin Carr <gavin@openfusion.com.au> 0.9.13
 - Fix bug in check_file glob handling.
