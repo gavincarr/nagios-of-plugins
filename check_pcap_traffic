@@ -1,0 +1,97 @@
+#!/usr/bin/perl -w
+#
+# Nagios plugin to check arbitrary interface traffic using pcap
+#
+
+use strict;
+use File::Basename;
+use IO::Socket;
+use Nagios::Plugin;
+use Net::Pcap qw(:functions);
+
+# ----------------------------------------------------------------------------
+# Main
+
+my $np = Nagios::Plugin->new(
+  usage => qq(Usage: %s [-v] [-i <interface>] [--interval <secs>] <pcap_filter>\n),
+  version => '0.1',
+  url => 'http://www.openfusion.com.au/labs/nagios/',
+  blurb => qq/This plugin tests for arbitrary interface traffic using pcap./,
+  extra => qq/\nTypically requires root (or sudo) privileges./,
+);
+$np->add_arg(
+  spec => "interface|i=s",
+  help => q(-i, --interface=STRING
+   Interface on which to listen. Default: 'any'),
+  default => 'any');
+$np->add_arg(
+  spec => "interval|I=i", 
+  help => q(-I, --interval=SECONDS
+   Length of time to listen on interface, in seconds. Default: 5), 
+  default => 5);
+$np->add_arg(
+  spec => "warning|w=s",
+  help => q(-w, --warning=RANGE
+   Exit with WARNING status if packet count is outside the given range),
+);
+$np->add_arg(
+  spec => "critical|c=s",
+  help => q(-c, --critical=RANGE
+   Exit with CRITICAL status if packet count is outside the given range),
+);
+$np->getopts;
+
+$np->nagios_die("No pcap filter expression found") unless @ARGV;
+my $filter_str = join(' ', @ARGV);
+
+alarm($np->opts->timeout);
+
+# Lookup 
+my ($network, $netmask, $err);
+my $int = $np->opts->interface;
+if (pcap_lookupnet($int, \$network, \$netmask, \$err) < 0) {
+  $np->nagios_die("Cannot get network settings on interface $int: $err");
+}
+
+# Instantiate $pcap
+my $pcap = pcap_open_live($int, 20, 0, 1000, \$err)
+  or $np->nagios_die("Cannot open interface $int: $err\n");
+
+# Add filter
+my $filter;
+if (pcap_compile($pcap, \$filter, $filter_str, 1, $netmask) < 0) {
+  $np->nagios_die("Compile on filter_str '$filter_str': " . pcap_geterr($pcap));
+}
+pcap_setfilter($pcap, $filter);
+
+# Set $pcap to non-blocking mode
+if (pcap_setnonblock($pcap, 1, \$err) < 0) {
+  $np->nagios_die("Failed setting non-blocking mode: $err");
+}
+
+my $count = 0;
+my $start = time;
+my $interval = $np->opts->interval;
+
+while (1) {
+  pcap_dispatch($pcap, 0, sub { $count++ }, {});
+  last if time - $start >= $interval;
+  sleep 1;
+}
+
+$np->nagios_exit( CRITICAL, "No packets captured matching filter '$filter_str' on interface $int" )
+  if $count == 0;
+
+# If used with thresholds, compare $count against them
+my $result = OK;
+if ($np->opts->critical || $np->opts->warning) {
+  $result = $np->check_threshold( $count );
+}
+
+$np->nagios_exit(
+  return_code   => $result,
+  message       => "$count packet(s) captured matching filter '$filter_str' on interface $int",
+);
+
+
+# vim:ft=perl:ai:sw=2
