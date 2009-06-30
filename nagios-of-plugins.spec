@@ -1,6 +1,6 @@
 Summary: Additional Nagios plugins by Open Fusion
 Name: nagios-of-plugins
-Version: 0.9.14
+Version: 0.10
 Release: 1.of
 License: GPL
 Group: Applications/System
@@ -30,6 +30,7 @@ written by Gavin Carr of Open Fusion. It requires Nagios::Plugin from CPAN.
 - check_memory
 - check_mountpoint
 - check_newest_file
+- check_pcap_traffic
 - check_qmailq
 - check_tcp_range
 - check_up2date
@@ -54,6 +55,9 @@ cp check* notify* $RPM_BUILD_ROOT/usr/lib/nagios/plugins
 %doc README
 
 %changelog
+
+* Fri Jun 12 2009 Gavin Carr <gavin@openfusion.com.au> 0.10
+- Add first-pass check_pcap_traffic plugin.
 
 * Fri Jun 12 2009 Gavin Carr <gavin@openfusion.com.au> 0.9.14
 - Add --unescape argument to check_grep.
