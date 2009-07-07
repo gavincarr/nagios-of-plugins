@@ -1,6 +1,6 @@
 Summary: Additional Nagios plugins by Open Fusion
 Name: nagios-of-plugins
-Version: 0.10
+Version: 0.10.1
 Release: 1.of
 License: GPL
 Group: Applications/System
@@ -55,6 +55,9 @@ cp check* notify* $RPM_BUILD_ROOT/usr/lib/nagios/plugins
 %doc README
 
 %changelog
+
+* Tue Jul 07 2009 Gavin Carr <gavin@openfusion.com.au> 0.10.1
+- Add --missing-ok argument to check_linux_raid.
 
 * Fri Jun 12 2009 Gavin Carr <gavin@openfusion.com.au> 0.10
 - Add first-pass check_pcap_traffic plugin.

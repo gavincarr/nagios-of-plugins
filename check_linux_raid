@@ -19,6 +19,10 @@ my $ng = Nagios::Plugin::Getopt->new(
 $ng->arg("errors-only|e", 
   qq(-e, --errors-only
    Display only devices with errors));
+$ng->arg(
+  spec => "missing-ok",
+  help => qq(--missing-ok
+   Don't give warnings if no raid devices exist.));
 $ng->getopts;
 
 my $np = Nagios::Plugin->new;
@@ -87,7 +91,8 @@ if (@ARGV) {
 else {
     @check = sort keys %md;
 }
-$np->nagios_exit(UNKNOWN, "No raid devices found") unless @check;
+$np->nagios_exit($ng->get('missing-ok') ? OK : UNKNOWN, "No raid devices found")
+  if ! @check;
 
 my (@crit, @warn, @ok);
 for my $dev (@check) {
