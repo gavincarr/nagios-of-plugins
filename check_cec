@@ -1,0 +1,108 @@
+#!/usr/bin/perl
+#
+# Run checks on a Coraid AoE disk array using Coraid's 'cec' utility.
+#
+# Ideas stolen from Erwan Ben Souiden's check_coraid.pl, which I liked, but didn't
+# want to work for me (and the use of script output files seems overly fragile).
+#
+
+use strict;
+
+use Nagios::Plugin;
+use Expect;
+
+# %check is a map defining checks as a command to run, and a sub to run on the command output
+my %check = (
+  raid          => [ 'list -l', sub {
+    my ($np, $data) = @_;
+    $np->nagios_die( "'raid' check returned no data" ) unless $data;
+    while ($data =~ m/^ \s+ ( (\S+) \s+ (\S+) \s+ (raid\w+) \s+ (\w+) ) \s* $/msgx) {
+      my ($line, $slot, $size, $raid, $state) = ($1, $2, $3, $4, $5);
+      my $result = $state =~ qr/failed|degraded/ ? CRITICAL :
+                   $state eq 'normal'            ? OK :
+                                                   WARNING;
+      $np->add_message( $result, "shelf.slot $line" );
+    }
+  } ],
+);
+my $checks = join ' | ', sort keys %check;
+
+my $cmd_timeout = 2;
+
+my $np = Nagios::Plugin->new(
+  usage         => 'Usage: %s [-s <shelf>] [-i <interface>]',
+  version       => '0.1',
+  url           => 'http://www.openfusion.com.au/labs/nagios/',
+  blurb         => q{This plugin runs checks on a Coraid AoE disk array using Coraid's cec utility
+(which is expected to be in your path).},
+);
+
+$np->add_arg(
+  spec          => 'shelf|s=i',
+  help          => '-s, --shelf=INTEGER
+   Shelf to check (integer, 1 - 99)',
+  default       => 1,
+);
+$np->add_arg(
+  spec          => 'interface|i=s',
+  help          => '-i, --interface=STRING
+   Network interface to be used',
+  required      => 1,
+);
+$np->add_arg(
+  spec          => 'check|c=s@',
+  help          => "-c, --check=[ $checks ]
+   Check to run via cec (may repeat)",
+  required      => 1,
+);
+
+$np->getopts;
+my $shelf       = $np->opts->shelf;
+my $int         = $np->opts->interface;
+my $checklist   = $np->opts->check;
+foreach (@$checklist) {
+  $np->die("Invalid check '$_'") unless $check{$_};
+}
+
+my $exp = Expect->new;
+$exp->raw_pty(1);
+$exp->log_stdout(0);
+$exp->spawn('cec', '-s', $shelf, $int);
+
+$exp->expect($cmd_timeout,
+  "Probing for shelves ... shelf $shelf found.\n",
+  "connecting ... done.\n",
+  "Escape is Ctrl-\\\n",
+);
+$exp->send("\n");
+$exp->expect($cmd_timeout, "\n\n", "SR shelf $shelf> ");
+
+for my $checktype (@$checklist) {
+  my ($cmd, $sub) = @{ $check{$checktype} };
+  $exp->send_slow(.1, "$cmd\n");
+  my ($pos, $error, $match, $data) = $exp->expect(undef, -re => "SR shelf $shelf> ");
+  $np->die($error) if $error;
+  $sub->($np, $data);
+}
+
+# Exit
+$exp->send_slow(.1, "");
+$exp->expect($cmd_timeout, ">>> ");
+$exp->send_slow(.1, "q\n");
+$exp->expect($cmd_timeout, 'EOF');
+
+$exp->soft_close;
+
+$np->nagios_exit( $np->check_messages );
+
+__END__
+
+=todo 
+
+- add spare checking (# of spares)
+- add volume offline checking (# online)
+- add disk checking (# of disks up)
+- add --slot support
+
+=cut
+

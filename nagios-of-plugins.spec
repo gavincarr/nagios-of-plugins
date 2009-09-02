@@ -1,6 +1,6 @@
 Summary: Additional Nagios plugins by Open Fusion
 Name: nagios-of-plugins
-Version: 0.10.1
+Version: 0.11
 Release: 1.of
 License: GPL
 Group: Applications/System
@@ -19,6 +19,7 @@ BuildArch: noarch
 This package contains additional plugins for the Nagios monitoring system,
 written by Gavin Carr of Open Fusion. It requires Nagios::Plugin from CPAN.
 
+- check_cec
 - check_daemontools_service
 - check_db_query_rowcount
 - check_file
@@ -55,6 +56,9 @@ cp check* notify* $RPM_BUILD_ROOT/usr/lib/nagios/plugins
 %doc README
 
 %changelog
+
+* Wed Sep 02 2009 Gavin Carr <gavin@openfusion.com.au> 0.11
+- Add first-pass check_cec plugin.
 
 * Tue Jul 07 2009 Gavin Carr <gavin@openfusion.com.au> 0.10.1
 - Add --missing-ok argument to check_linux_raid.
