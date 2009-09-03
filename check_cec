@@ -50,8 +50,8 @@ $np->add_arg(
   required      => 1,
 );
 $np->add_arg(
-  spec          => 'check|c=s@',
-  help          => "-c, --check=[ $checks ]
+  spec          => 'check|k=s@',
+  help          => "-k, --check=[ $checks ]
    Check to run via cec (may repeat)",
   required      => 1,
 );

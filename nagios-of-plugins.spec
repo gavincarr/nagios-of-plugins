@@ -1,6 +1,6 @@
 Summary: Additional Nagios plugins by Open Fusion
 Name: nagios-of-plugins
-Version: 0.11
+Version: 0.11.1
 Release: 1.of
 License: GPL
 Group: Applications/System
@@ -56,6 +56,9 @@ cp check* notify* $RPM_BUILD_ROOT/usr/lib/nagios/plugins
 %doc README
 
 %changelog
+
+* Thu Sep 03 2009 Gavin Carr <gavin@openfusion.com.au> 0.11.1
+- Change check_cec check short option to -k.
 
 * Wed Sep 02 2009 Gavin Carr <gavin@openfusion.com.au> 0.11
 - Add first-pass check_cec plugin.
