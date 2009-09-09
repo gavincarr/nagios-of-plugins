@@ -13,24 +13,40 @@ use Expect;
 
 # %check is a map defining checks as a command to run, and a sub to run on the command output
 my %check = (
-  raid          => [ 'list -l', sub {
-    my ($np, $data) = @_;
-    $np->nagios_die( "'raid' check returned no data" ) unless $data;
-    while ($data =~ m/^ \s+ ( (\S+) \s+ (\S+) \s+ (raid\w+) \s+ (\w+) ) \s* $/msgx) {
-      my ($line, $slot, $size, $raid, $state) = ($1, $2, $3, $4, $5);
-      my $result = $state =~ qr/failed|degraded/ ? CRITICAL :
-                   $state eq 'normal'            ? OK :
-                                                   WARNING;
-      $np->add_message( $result, "shelf.slot $line" );
+  disks         => [ 
+    'show -l' => sub {
+      my ($np, $data) = @_;
+      $np->nagios_die( "'disk' check returned no data" ) unless $data;
+      while ($data =~ m/^ ( (\S+) \s+ (\S+) \s+ (\w+) ) \s* $/msgx) {
+        my ($line, $disk, $size, $state) = ($1, $2, $3, $4);
+        $line =~ s/\s\s+/ /g;
+        my $result = $state eq 'up' ? OK : CRITICAL;
+        $np->add_message( $result, "disk $line" );
+      }
     }
-  } ],
+  ],
+  raid          => [ 
+    'list -l' => sub {
+      my ($np, $data) = @_;
+      $np->nagios_die( "'raid' check returned no data" ) unless $data;
+      while ($data =~ m/^ \s+ ( (\S+) \s+ (\S+) \s+ (raid\w+) \s+ (\w+) ) \s* $/msgx) {
+        my ($line, $lun, $size, $raid, $state) = ($1, $2, $3, $4, $5);
+        $line =~ s/\s\s+/ /g;
+        my $result = $state =~ qr/failed|degraded/ ? CRITICAL :
+                     $state eq 'normal'            ? OK :
+                                                     WARNING;
+        $np->add_message( $result, "LUN $line" );
+      }
+    }
+  ],
 );
 my $checks = join ' | ', sort keys %check;
 
 my $cmd_timeout = 2;
 
 my $np = Nagios::Plugin->new(
-  usage         => 'Usage: %s [-s <shelf>] [-i <interface>]',
+  usage         => "Usage: %s [-s <shelf>] -i <interface> -k <check>\n" .
+                   "  where <check> is one of: raid | disks\n",
   version       => '0.1',
   url           => 'http://www.openfusion.com.au/labs/nagios/',
   blurb         => q{This plugin runs checks on a Coraid AoE disk array using Coraid's cec utility
@@ -52,7 +68,7 @@ $np->add_arg(
 $np->add_arg(
   spec          => 'check|k=s@',
   help          => "-k, --check=[ $checks ]
-   Check to run via cec (may repeat)",
+   Check to run via cec, valid values: 'raid' | 'disks' (may repeat)",
   required      => 1,
 );
 
@@ -94,13 +110,12 @@ $exp->expect($cmd_timeout, 'EOF');
 
 $exp->soft_close;
 
-$np->nagios_exit( $np->check_messages );
+$np->nagios_exit( $np->check_messages( join => ', ' ) );
 
 __END__
 
 =todo 
 
-- add a timeout alarm
 - add spare checking (# of spares)
 - add volume offline checking (# online)
 - add disk checking (# of disks up)
