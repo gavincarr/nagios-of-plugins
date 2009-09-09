@@ -64,6 +64,7 @@ foreach (@$checklist) {
   $np->die("Invalid check '$_'") unless $check{$_};
 }
 
+alarm $np->opts->timeout;
 my $exp = Expect->new;
 $exp->raw_pty(1);
 $exp->log_stdout(0);
@@ -99,6 +100,7 @@ __END__
 
 =todo 
 
+- add a timeout alarm
 - add spare checking (# of spares)
 - add volume offline checking (# online)
 - add disk checking (# of disks up)
