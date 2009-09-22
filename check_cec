@@ -29,7 +29,7 @@ my %check = (
     'list -l' => sub {
       my ($np, $data) = @_;
       $np->nagios_die( "'raid' check returned no data" ) unless $data;
-      while ($data =~ m/^ \s+ ( (\S+) \s+ (\S+) \s+ (raid\w+) \s+ (\w+) ) \s* $/msgx) {
+      while ($data =~ m/^ \s+ ( (\S+) \s+ (\S+) \s+ (raid\w+) \s+ ([\w,]+) ) \s* $/msgx) {
         my ($line, $lun, $size, $raid, $state) = ($1, $2, $3, $4, $5);
         $line =~ s/\s\s+/ /g;
         my $result = $state =~ qr/failed|degraded/ ? CRITICAL :

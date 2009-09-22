@@ -1,6 +1,6 @@
 Summary: Additional Nagios plugins by Open Fusion
 Name: nagios-of-plugins
-Version: 0.11.2
+Version: 0.11.3
 Release: 1.of
 License: GPL
 Group: Applications/System
@@ -56,6 +56,9 @@ cp check* notify* $RPM_BUILD_ROOT/usr/lib/nagios/plugins
 %doc README
 
 %changelog
+
+* Thu Sep 22 2009 Gavin Carr <gavin@openfusion.com.au> 0.11.3
+- Fix buglet in check_cec 'raid' status checking (can include commas).
 
 * Wed Sep 09 2009 Gavin Carr <gavin@openfusion.com.au> 0.11.2
 - Add a timeout alarm to check_cec.
