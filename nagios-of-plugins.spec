@@ -1,6 +1,6 @@
 Summary: Additional Nagios plugins by Open Fusion
 Name: nagios-of-plugins
-Version: 0.11.3
+Version: 0.11.4
 Release: 1.of
 License: GPL
 Group: Applications/System
@@ -56,6 +56,8 @@ cp check* notify* $RPM_BUILD_ROOT/usr/lib/nagios/plugins
 %doc README
 
 %changelog
+* Wed Sep 23 2009 Gavin Carr <gavin@openfusion.com.au> 0.11.4
+- Add --count support to check_file plugin (for use with globs).
 
 * Thu Sep 22 2009 Gavin Carr <gavin@openfusion.com.au> 0.11.3
 - Fix buglet in check_cec 'raid' status checking (can include commas).
