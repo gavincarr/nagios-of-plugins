@@ -27,7 +27,7 @@ sub getopts {
   my $ng = Nagios::Plugin::Getopt->new(
   usage => q(Usage: %s [-v] [-i] [-m <mtime>] [-s <size>] 
          [-r <regex>] [-e <error-regex>] [-f] /path/to/file [/path/to/file2 ...]),
-  version => '0.05',
+  version => '0.06',
   url => 'http://www.openfusion.com.au/labs/nagios/',
   blurb => q(This plugin checks various constraints on a given file.),
   extra => qq(
@@ -49,10 +49,13 @@ constraint.),
   default => []);
   $ng->arg("mtime|m=s",
   q(-m, --mtime=MTIME
-   Modification time of file (default: maximum age in seconds)));
+   Modification time of file (maximum age in seconds)));
   $ng->arg("size|s=s",
   q(-s, --size=SIZE
-   Size of file (default: minimum size in bytes)));
+   Size of file (minimum size in bytes)));
+  $ng->arg("count|c=s",
+  q(-c, --count=COUNT
+   (Minimum) Number of files that should exist (for use with globs)));
   $ng->arg("regex|r=s@",
   q(-r, --regex=REGEX
    Regex that should be found in file (may be repeated)));
@@ -176,6 +179,7 @@ sub run {
   }
 
   my (@crit, @ok);
+  my $file_count = 0;
   while (my $file = shift @{$ng->file}) {
     # $file may be a glob, which we should expand, and which should yield >= 1 filenames
     if ($file =~ m/[*?]/) {
@@ -187,6 +191,9 @@ sub run {
       }
       next;
     }
+
+    $file_count++;
+
     # Check existence of $file
     if (! -e $file) {
       push @crit, "$file: does not exist";
@@ -214,6 +221,7 @@ sub run {
         push @attr, "size ${s}B vs. $size";
       }
     }
+
     if (($ng->regex && @{$ng->regex}) || 
         ($ng->get('error_regex') && @{$ng->get('error_regex')})) {
       # Slurp file contents
@@ -260,6 +268,19 @@ sub run {
     }
   }
 
+  # Check count constraint
+  if (my $count = $ng->count) {
+    # Default semantic is that count is a minimum, not exact (must use e.g. "5:5" for that)
+    $count = "$count:" unless $count =~ m/:/;
+
+    if ($np->check_threshold(check => $file_count, critical => $count) != OK) {
+      push @crit, "Found $file_count matching file(s), violating count constraint '$count'";
+    }
+    else {
+      push @ok, "Found $file_count matching file(s), count constraint '$count' ok";
+    }
+  }
+
   my $message = @crit ? join(' :: ', @crit) . '  ' : '';
   $message .= 'OK: ' . join(', ', @ok) if @ok;
   my $code = $np->check_messages(critical => \@crit);
@@ -276,5 +297,4 @@ unless (caller) {
 
 1;
 
-# arch-tag: 59479678-04b6-4a81-b99d-950f18f7c4ae
 # vim:ft=perl
