@@ -17,6 +17,8 @@ use Nagios::Plugin::Getopt;
 use Nagios::Plugin 0.1301;
 use Time::Piece;
 
+my @warn_on_conditions = qw(all exists mtime size count regex error-regex);
+
 sub new {
   my $class = shift;
   bless {}, $class;
@@ -68,6 +70,10 @@ constraint.),
   $ng->arg("weekdays",
   q(--weekdays
    Tweak modification time tests to ignore weekends));
+  $ng->arg("warn-on=s",
+  q{--warn-on=WARN_CONDITIONS
+   Issue warnings instead of criticals on listed conditions (comma-separated)
+   Conditions: all|exists|mtime|size|count|regex|error-regex});
 
   $ng->getopts;
 
@@ -159,6 +165,9 @@ sub run {
 
   $np->die("Required arguments missing: file") unless $ng->file && @{$ng->file};
 
+  my %warn_on = $ng->get('warn-on') ? map { $_ => 1 } split(/,/, $ng->get('warn-on')) : ();
+  %warn_on = map { $_ => 1 } @warn_on_conditions if $warn_on{all};
+
   my $mtime = $ng->mtime;
   my $size = $ng->size;
   if ($mtime) {
@@ -178,7 +187,7 @@ sub run {
     $size = $size_bytes;
   }
 
-  my (@crit, @ok);
+  my (@crit, @warn, @ok);
   my $file_count = 0;
   while (my $file = shift @{$ng->file}) {
     # $file may be a glob, which we should expand, and which should yield >= 1 filenames
@@ -187,7 +196,7 @@ sub run {
         unshift @{$ng->file}, @file;
       }
       else {
-        push @crit, "glob $file does not match any files";
+        push @{ $warn_on{all} ? \@warn : \@crit }, "glob $file does not match any files";
       }
       next;
     }
@@ -196,10 +205,10 @@ sub run {
 
     # Check existence of $file
     if (! -e $file) {
-      push @crit, "$file: does not exist";
+      push @{ $warn_on{exists} ? \@warn : \@crit }, "$file: does not exist";
       next;
     }
-    my (@violations, @attr);
+    my (@file_crit, @file_warn, @ok_attr);
     # Check constraints
     if ($mtime || $size) {
       my ($s, $m) = (stat $file)[7,9];
@@ -213,12 +222,14 @@ sub run {
             $age -= 2 * 86400;
           }
         }
-        push @violations, "bad mtime (${age}s vs. $mtime)" if $self->violate($age, $mtime);
-        push @attr, "mtime ${age}s vs. $mtime";
+        push @{ $warn_on{mtime} ? \@file_warn : \@file_crit }, "bad mtime (${age}s vs. $mtime)" 
+          if $self->violate($age, $mtime);
+        push @ok_attr, "mtime ${age}s vs. $mtime";
       }
       if ($size) {
-        push @violations, "bad size (${s}B vs. $size)" if $self->violate($s, $size);
-        push @attr, "size ${s}B vs. $size";
+        push @{ $warn_on{size} ? \@file_warn : \@file_crit }, "bad size (${s}B vs. $size)" 
+          if $self->violate($s, $size);
+        push @ok_attr, "size ${s}B vs. $size";
       }
     }
 
@@ -239,10 +250,10 @@ sub run {
       if ($ng->regex && ref $ng->regex eq 'ARRAY') {
         for my $regex (@{$ng->regex}) {
           if ($content =~ m/$ic$regex/) {
-            push @attr, "regex /$regex/ matches";
+            push @ok_attr, "regex /$regex/ matches";
           }
           else {
-            push @violations, "no match for regex /$regex/";
+            push @{ $warn_on{regex} ? \@file_warn : \@file_crit }, "no match for regex /$regex/";
           }
         }
       }
@@ -250,20 +261,23 @@ sub run {
       if ($error_regex && ref $error_regex eq 'ARRAY') {
         for my $error (@$error_regex) {
           if ($content =~ m/$ic$error/) {
-            push @violations, "error regex /$error/ matches";
+            push @{ $warn_on{'error-regex'} ? \@file_warn : \@file_crit }, "error regex /$error/ matches";
           }
           else {
-            push @attr, "no match for error regex /$error/";
+            push @ok_attr, "no match for error regex /$error/";
           }
         }
       }
     }
-    if (@violations) {
-      push @crit, "$file: " . join(', ', @violations);
+    if (@file_crit) {
+      push @crit, "$file: " . join(', ', @file_crit);
+    }
+    elsif (@file_warn) {
+      push @warn, "$file: " . join(', ', @file_warn);
     }
     else {
       my $ok = $file;
-      $ok .= sprintf " (%s)", join(', ', @attr) if @attr;
+      $ok .= sprintf " (%s)", join(', ', @ok_attr) if @ok_attr;
       push @ok, $ok;
     }
   }
@@ -274,7 +288,8 @@ sub run {
     $count = "$count:" unless $count =~ m/:/;
 
     if ($np->check_threshold(check => $file_count, critical => $count) != OK) {
-      push @crit, "Found $file_count matching file(s), violating count constraint '$count'";
+      push @{ $warn_on{count} ? \@warn : \@crit }, 
+        "Found $file_count matching file(s), violating count constraint '$count'";
     }
     else {
       push @ok, "Found $file_count matching file(s), count constraint '$count' ok";
@@ -282,8 +297,9 @@ sub run {
   }
 
   my $message = @crit ? join(' :: ', @crit) . '  ' : '';
+  $message .= @warn ? join(' :: ', @warn) . '  ' : '';
   $message .= 'OK: ' . join(', ', @ok) if @ok;
-  my $code = $np->check_messages(critical => \@crit);
+  my $code = $np->check_messages(critical => \@crit, warning => \@warn);
   $np->nagios_exit($code, $message);
 }
 

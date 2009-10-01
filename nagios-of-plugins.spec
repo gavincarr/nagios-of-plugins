@@ -1,6 +1,6 @@
 Summary: Additional Nagios plugins by Open Fusion
 Name: nagios-of-plugins
-Version: 0.11.4
+Version: 0.11.5
 Release: 1.of
 License: GPL
 Group: Applications/System
@@ -56,6 +56,9 @@ cp check* notify* $RPM_BUILD_ROOT/usr/lib/nagios/plugins
 %doc README
 
 %changelog
+* Thu Oct 01 2009 Gavin Carr <gavin@openfusion.com.au> 0.11.5
+- Add --warn-on support to check_file plugin (selective warnings selector).
+
 * Wed Sep 23 2009 Gavin Carr <gavin@openfusion.com.au> 0.11.4
 - Add --count support to check_file plugin (for use with globs).
 
