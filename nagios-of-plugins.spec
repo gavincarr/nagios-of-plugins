@@ -56,6 +56,9 @@ cp check* notify* $RPM_BUILD_ROOT/usr/lib/nagios/plugins
 %doc README
 
 %changelog
+* Wed Mar 17 2010 Gavin Carr <gavin@openfusion.com.au> 0.11.6
+- Fix --count problems with check_newest_file.
+
 * Thu Oct 01 2009 Gavin Carr <gavin@openfusion.com.au> 0.11.5
 - Add --warn-on support to check_file plugin (selective warnings selector).
 
