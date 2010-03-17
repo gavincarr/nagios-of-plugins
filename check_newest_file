@@ -22,9 +22,9 @@ use File::stat;
 sub getopts {
   my $self = shift;
   my $ng = Nagios::Plugin::Getopt->new(
-  usage => q(Usage: %s -d /path/to/directory [-m <mtime>] [-s <size>] 
-         [-r <regex>] [-e <error-regex>] [-i] [-t timeout] [-v]),
-  version => '0.02',
+  usage => q(Usage: %s -d /path/to/directory [-m <mtime>] [-s <size>] [-c <count>]
+         [-r <regex>] [-e <error-regex>] [-i] [-t timeout] [-v] [--warn-on <CONDITIONS>]),
+  version => '0.03',
   url => 'http://www.openfusion.com.au/labs/nagios/',
   blurb => q(This plugin checks various constraints on the newest file in one or more directories.),
   extra => qq(Implemented as a wrapper around check_file, so see that plugin for details.),
@@ -41,6 +41,9 @@ sub getopts {
   $ng->arg("size|s=s",
   q(-s, --size=SIZE
    Size of file (default: minimum size in bytes)));
+  $ng->arg("count|c=s",
+  q(-c, --count=COUNT
+   (Minimum) Number of files that should exist (for use with globs)));
   $ng->arg("regex|r=s@",
   q(-r, --regex=REGEX
    Regex that should be found in file (may be repeated)));
@@ -53,6 +56,11 @@ sub getopts {
   $ng->arg("weekdays",
   q(--weekdays
    Tweak modification time tests to ignore weekends));
+  $ng->arg("warn-on=s",
+  q{--warn-on=WARN_CONDITIONS
+   Issue warnings instead of criticals on listed conditions (comma-separated)
+   Conditions: all|exists|mtime|size|count|regex|error-regex});
+
   $ng->getopts;
 
   # Find newest file in each directory

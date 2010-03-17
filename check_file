@@ -27,8 +27,9 @@ sub new {
 sub getopts {
   my $self = shift;
   my $ng = Nagios::Plugin::Getopt->new(
-  usage => q(Usage: %s [-v] [-i] [-m <mtime>] [-s <size>] 
-         [-r <regex>] [-e <error-regex>] [-f] /path/to/file [/path/to/file2 ...]),
+  usage => q(Usage: %s [-v] [-i] [-m <mtime>] [-s <size>] [-c <count>]
+         [-r <regex>] [-e <error-regex>] [--warn-on <CONDITIONS>] 
+         [-f] /path/to/file [/path/to/file2 ...]),
   version => '0.06',
   url => 'http://www.openfusion.com.au/labs/nagios/',
   blurb => q(This plugin checks various constraints on a given file.),
