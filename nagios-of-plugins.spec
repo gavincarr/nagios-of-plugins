@@ -1,6 +1,6 @@
 Summary: Additional Nagios plugins by Open Fusion
 Name: nagios-of-plugins
-Version: 0.11.7
+Version: 0.12
 Release: 1.of
 License: GPL
 Group: Applications/System
@@ -57,6 +57,9 @@ cp check* notify* $RPM_BUILD_ROOT/usr/lib/nagios/plugins
 %doc README
 
 %changelog
+* Tue May 04 2010 Gavin Carr <gavin@openfusion.com.au> 0.12
+- Add --file filtering option to check_newest_file.
+
 * Tue May 04 2010 Gavin Carr <gavin@openfusion.com.au> 0.11.7
 - Add explicit dependency on perl-Nagios-Plugin.
 
