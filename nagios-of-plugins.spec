@@ -1,6 +1,6 @@
 Summary: Additional Nagios plugins by Open Fusion
 Name: nagios-of-plugins
-Version: 0.11.6
+Version: 0.11.7
 Release: 1.of
 License: GPL
 Group: Applications/System
@@ -12,6 +12,7 @@ Buildroot: %_tmppath/%{name}-%{version}
 Requires: bash
 Requires: perl
 Requires: nagios-plugins
+Requires: perl-Nagios-Plugin
 AutoReq: no
 BuildArch: noarch
 
@@ -56,6 +57,9 @@ cp check* notify* $RPM_BUILD_ROOT/usr/lib/nagios/plugins
 %doc README
 
 %changelog
+* Tue May 04 2010 Gavin Carr <gavin@openfusion.com.au> 0.11.7
+- Add explicit dependency on perl-Nagios-Plugin.
+
 * Wed Mar 17 2010 Gavin Carr <gavin@openfusion.com.au> 0.11.6
 - Fix --count problems with check_newest_file.
 
