@@ -28,14 +28,14 @@ sub getopts_constructor_args
 {
   my $self = shift;
   return (
-  usage => qq(Usage: %s [-d default-level ] [-t timeout] [-v]
+    usage => qq(Usage: %s [-d default-level ] [-t timeout] [-v]
                  [-w warning-pkgs] [-W warning-repos]
                  [-c critical-pkgs] [-C critical-repos]
                  [-x exclude-pkgs] [-X exclude-repos]\n),
-  version => '0.05',
-  url => 'http://www.openfusion.com.au/labs/nagios/',
-  blurb => qq(This plugin checks for outstanding package updates via yum or up2date.),
-  extra => qq(
+    version => '0.05',
+    url => 'http://www.openfusion.com.au/labs/nagios/',
+    blurb => qq(This plugin checks for outstanding package updates via yum or up2date.),
+    extra => qq/
 Package lists (-w, -c, -x etc.) take precedence over repository lists
 (-W, -C, -X etc.).
 
@@ -44,6 +44,7 @@ e.g. -x 'kernel*' -c 'httpd*,mod_*,rsync'. Repository lists do NOT support
 wildcards, however.
 
 Note that $self->{plugin} probably needs to run as root to work correctly.),
+    /,
   );
 }
 

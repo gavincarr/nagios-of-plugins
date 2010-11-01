@@ -1,7 +1,9 @@
 #!/usr/bin/perl -w
 #
-# check_yum/check_up2date - nagios plugin to check for outstanding updates via yum 
-# (or via dbus if invoked as check_yum_dbus, or up2date if invoked as check_up2date)
+# check_yum_dbus - nagios plugin to check for outstanding updates via dbus
+# and yum-updatesd.
+#
+# Authors: Jason A. Smith and Gavin Carr
 #
 
 package check_yum_dbus;
@@ -16,6 +18,33 @@ use lib $Bin;
 require 'check_yum';
 our @ISA;
 push @ISA, qw(check_yum);
+
+our $version = '0.01';
+
+sub getopts_constructor_args
+{
+  my $self = shift;
+  return (
+    usage => qq(Usage: %s [-t timeout] [-v]\n),
+    version => $version,
+    url => 'http://www.openfusion.com.au/labs/nagios/',
+    blurb => qq(This plugin checks for available yum package updates using dbus and yum-updatesd.),
+    extra => qq/
+$self->{plugin} checks for yum updates using dbus and yum-updatesd. This is 
+a more lightweight check than using standard check_yum, and it has the 
+ability to distinguish the *type* of the update e.g. security, bugfix, 
+enhancement, or unknown.
+
+On the negative side, this introduces additional dependencies - dbus and
+yum-updatesd - into your required infrastructure. And on at least some 
+platforms yum-updatesd appears to be flaky. As usual, YMMV.
+
+$self->{plugin} returns CRITICAL if any security updates are found, and 
+WARNING otherwise./,
+  );
+}
+
+sub getopts_add_args {}
 
 # Note: When most of yum DBus methods fail, they throw a python error and terminate the script immediately:
 # - Use eval to catch them and return a nagios unknown error.
