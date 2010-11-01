@@ -253,8 +253,8 @@ sub process_results
 sub run
 {
   my $self = shift;
-  my ($rc, $output) = $self->run_check;
-  $self->process_results($rc, $output);
+  my ($rc, $results) = $self->run_check;
+  $self->process_results($rc, $results);
 }
 
 # Magic to check if we're being called directly, rather than as a module

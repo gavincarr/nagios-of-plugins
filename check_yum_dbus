@@ -1,0 +1,102 @@
+#!/usr/bin/perl -w
+#
+# check_yum/check_up2date - nagios plugin to check for outstanding updates via yum 
+# (or via dbus if invoked as check_yum_dbus, or up2date if invoked as check_up2date)
+#
+
+package check_yum_dbus;
+
+use strict;
+use File::Basename;
+use Nagios::Plugin::Functions 0.1301;
+use Net::DBus;
+
+use FindBin qw($Bin);
+use lib $Bin;
+require 'check_yum';
+our @ISA;
+push @ISA, qw(check_yum);
+
+# Note: When most of yum DBus methods fail, they throw a python error and terminate the script immediately:
+# - Use eval to catch them and return a nagios unknown error.
+# - Restarting yum-updatesd and/or the messagebus seems to fix it most of the time.
+sub _exit_unknown 
+{
+  my ($self, $component, $error) = @_;
+  $error =~ s/\n/, /g;
+  nagios_exit(UNKNOWN, "DBus $component failed: try restarting yum-updatesd and/or the messagebus: $error");
+}
+
+# Query package update info via dbus
+sub run_check {
+  my $self = shift;
+
+  alarm($self->{ng}->timeout);
+
+  my $dbus = eval { Net::DBus->system } 
+    or $self->_exit_unknown('system bus connection', $@);
+
+  # Connect to the yum service on the DBus
+  my $service = eval { $dbus->get_service("edu.duke.linux.yum") }
+    or $self->_exit_unknown('get_service', $@);
+
+  # Connect to the update object provided by the yum service
+  my $object = eval { $service->get_object("/Updatesd") }
+    or $self->_exit_unknown('get_object', $@);
+
+  # Query the update object for package update information
+  my $updates = eval { $object->GetUpdateInfo };
+  # FIXME: when there are no updates, RHEL 5's yum-updatesd seems to (always?) return a python index error because of the empty list
+  if ($@ && $@ =~ /org.freedesktop.DBus.Python.exceptions.IndexError.*IndexError: list index out of range/) {
+    $updates = [];
+  }
+  elsif ($@) {
+    $self->_exit_unknown('GetUpdateInfo', $@);
+  }
+
+  # Schedule a yum check for updates now, so it completes before the next nagios check
+  my $ret = $object->CheckNow;
+  print "Scheduled yum update check....(ret=$ret)\n" if $self->{ng}->verbose;
+
+  alarm(0);
+
+  return (0, $updates);
+}
+
+sub process_results
+{
+  my ($self, $rc, $updates) = @_;
+
+  nagios_exit(OK, "All packages are up to date.") if @$updates == 0;
+
+  # Collate package updates by type
+  my %type = ();
+  # Add a name_arch field to first item
+  $_->[0]->{name_arch} = sprintf '%s.%s', $_->[0]->{name}, $_->[0]{arch} foreach @$updates;
+  for my $u (sort { $a->[0]->{name_arch} cmp $b->[0]->{name_arch} } @$updates) {
+    my $new = $u->[0];
+    my $old = $u->[1];
+    $new->{type} ||= 'unknown';
+    $type{ $new->{type} }++; 
+
+    printf "Yum [%s] update for %s: current=%s-%s , new=%s-%s\n", 
+      $new->{type},
+      $new->{name_arch}, 
+      $old->{version}, $old->{release},
+      $new->{version}, $new->{release}
+      if $self->{ng}->verbose >= 2;
+  }
+
+  my $results = sprintf "Updates found: total=%d [security=%d, bugfix=%d, enhancement=%d, unknown=%d].\n",
+    scalar(@$updates), $type{security}||0, $type{bugfix}||0, $type{enhancement}||0, $type{unknown}||0;
+
+  nagios_exit($type{'security'}||0 > 0 ? CRITICAL : WARNING, $results);
+}
+
+unless (caller) {
+  package main;
+  my $self = check_yum_dbus->new;
+  $self->getopts;
+  $self->run;
+}
+
