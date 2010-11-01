@@ -1,6 +1,6 @@
-Summary: Additional Nagios plugins by Open Fusion
+Summary: Open Fusion nagios plugins
 Name: nagios-of-plugins
-Version: 0.12
+Version: 0.13
 Release: 1.of
 License: GPL
 Group: Applications/System
@@ -17,8 +17,9 @@ AutoReq: no
 BuildArch: noarch
 
 %description
-This package contains additional plugins for the Nagios monitoring system,
-written by Gavin Carr of Open Fusion. It requires Nagios::Plugin from CPAN.
+This package contains additional plugins for the Nagios monitoring system
+in perl, written by Gavin Carr of Open Fusion and contributors. It requires
+the Nagios::Plugin module from CPAN.
 
 - check_cec
 - check_daemontools_service
@@ -37,6 +38,7 @@ written by Gavin Carr of Open Fusion. It requires Nagios::Plugin from CPAN.
 - check_tcp_range
 - check_up2date
 - check_yum
+- check_yum_dbus
 
 See individual plugin -h output for usage details.
 
@@ -57,6 +59,10 @@ cp check* notify* $RPM_BUILD_ROOT/usr/lib/nagios/plugins
 %doc README
 
 %changelog
+* Mon Nov 01 2010 Gavin Carr <gavin@openfusion.com.au> 0.13
+- Refactored check_yum to OO-style, to allow subclassing.
+- Add check_yum_dbus plugin, based on code from Jason A. Smith.
+
 * Tue May 04 2010 Gavin Carr <gavin@openfusion.com.au> 0.12
 - Add --file filtering option to check_newest_file.
 
