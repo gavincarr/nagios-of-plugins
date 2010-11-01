@@ -53,6 +53,7 @@ sub getopts_add_args {}
 sub _exit_unknown 
 {
   my ($self, $component, $error) = @_;
+  chomp $error;
   $error =~ s/\n/, /g;
   nagios_exit(UNKNOWN, "DBus $component failed: try restarting yum-updatesd and/or the messagebus: $error");
 }
