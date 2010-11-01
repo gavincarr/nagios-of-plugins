@@ -11,7 +11,8 @@ use File::Basename;
 use Nagios::Plugin::Getopt;
 use Nagios::Plugin::Functions 0.1301;
 
-sub new {
+sub new
+{
   my $class = shift;
 
   my $self = bless {
@@ -23,9 +24,10 @@ sub new {
   return $self;
 }
 
-sub getopts {
+sub getopts_constructor_args
+{
   my $self = shift;
-  my $ng = Nagios::Plugin::Getopt->new(
+  return (
   usage => qq(Usage: %s [-d default-level ] [-t timeout] [-v]
                  [-w warning-pkgs] [-W warning-repos]
                  [-c critical-pkgs] [-C critical-repos]
@@ -33,7 +35,8 @@ sub getopts {
   version => '0.05',
   url => 'http://www.openfusion.com.au/labs/nagios/',
   blurb => qq(This plugin checks for outstanding package updates via yum or up2date.),
-  extra => qq(Package lists (-w, -c, -x etc.) take precedence over repository lists
+  extra => qq(
+Package lists (-w, -c, -x etc.) take precedence over repository lists
 (-W, -C, -X etc.).
 
 Tokens in package lists may include glob-style wildcards, as well as literals
@@ -41,7 +44,21 @@ e.g. -x 'kernel*' -c 'httpd*,mod_*,rsync'. Repository lists do NOT support
 wildcards, however.
 
 Note that $self->{plugin} probably needs to run as root to work correctly.),
-);
+  );
+}
+
+sub getopts_new
+{
+  my $self = shift;
+  Nagios::Plugin::Getopt->new(
+    $self->getopts_constructor_args
+  );
+}
+
+sub getopts_add_args
+{
+  my $self = shift;
+  my $ng = $self->{ng};
   $ng->arg("warning|w=s", qq(-w, --warning=STRING
     Packages (comma-separated) to treat as warnings));
   $ng->arg("critical|c=s", qq(-c, --critical=STRING
@@ -57,9 +74,14 @@ Note that $self->{plugin} probably needs to run as root to work correctly.),
   $ng->arg("default|d=s", qq(-d, --default=STRING
     Default level: c | w | x | critical | warning | exclude (default: %s)),
     'critical');
+}
 
-  $ng->getopts;
-  $self->{ng} = $ng;
+sub getopts
+{
+  my $self = shift;
+  $self->{ng} = $self->getopts_new;
+  $self->getopts_add_args;
+  $self->{ng}->getopts;
 }
 
 # ------------------------------------------------------------------------
