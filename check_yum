@@ -43,8 +43,7 @@ Tokens in package lists may include glob-style wildcards, as well as literals
 e.g. -x 'kernel*' -c 'httpd*,mod_*,rsync'. Repository lists do NOT support
 wildcards, however.
 
-Note that $self->{plugin} probably needs to run as root to work correctly.),
-    /,
+Note that $self->{plugin} probably needs to run as root to work correctly./,
   );
 }
 

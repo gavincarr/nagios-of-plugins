@@ -33,7 +33,8 @@ sub getopts_constructor_args
 $self->{plugin} checks for yum updates using dbus and yum-updatesd. This is 
 a more lightweight check than using standard check_yum, and it has the 
 ability to distinguish the *type* of the update e.g. security, bugfix, 
-enhancement, or unknown.
+enhancement, or unknown. In addition, it seems to not require root access,
+unlike check_yum.
 
 On the negative side, this introduces additional dependencies - dbus and
 yum-updatesd - into your required infrastructure. And on at least some 
