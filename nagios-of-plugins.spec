@@ -1,6 +1,6 @@
 Summary: Open Fusion nagios plugins
 Name: nagios-of-plugins
-Version: 0.13
+Version: 0.13.1
 Release: 1.of
 License: GPL
 Group: Applications/System
@@ -59,6 +59,9 @@ cp check* notify* $RPM_BUILD_ROOT/usr/lib/nagios/plugins
 %doc README
 
 %changelog
+* Mon Nov 19 2010 Gavin Carr <gavin@openfusion.com.au> 0.13.1
+- Fix bugs in check_db_query_rowcount range checking (v0.6).
+
 * Mon Nov 01 2010 Gavin Carr <gavin@openfusion.com.au> 0.13
 - Refactored check_yum to OO-style, to allow subclassing.
 - Add check_yum_dbus plugin, based on code from Jason A. Smith.
