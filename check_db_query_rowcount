@@ -13,16 +13,22 @@ use DBI;
 my $np = Nagios::Plugin->new(
   usage =>  qq(Usage: %s [-v] -q <query> [-w <warn-count>] [-c <crit-count>]
                                  [-d <dsn>] [-u <user>] [-p <pass>]\n),
-  version => '0.05',
+  version => '0.06',
   url => 'http://www.openfusion.com.au/labs/nagios/',
   blurb => 'Plugin to run an arbitrary query against a db and test no. of rows returned.',
   extra => qq(Warning and critical rowcount ranges may be either single numbers or ranges.
+
+Note that because of the (braindead) way nagios ranges work, single numbers
+actually mean 0-N, not just N. If you just mean a single number, you have to
+say N:N.
+
 Ranges may be specified using the following syntaxes:
 - explicit ranges (colon-separated) e.g. 50:100
 - open-ended ranges (colon-separated) for greater-than-or-equal-to 
   and less-than-or-equal-to tests e.g. 50:, :100
+
 It is generally safe to use open-ended ranges for both warning and critical 
-rowcounts - critical rowcounts are checked first.
+rowcounts, since critical rowcounts are checked first.
 
 It is recommended that you set 'dsn', 'user', and 'pass' variables in a 
 section of your plugins.cfg file and load them using --default-opts='section'.
@@ -89,9 +95,16 @@ $dbh->disconnect;
 # Query successful - evaluate results
 my $name = $np->opts->name ? $np->opts->name . ' ' : '';
 my $count = scalar(@$res);
-my $status = $np->check_threshold($count);
+my $critical = $np->opts->critical;
+my $warning = $np->opts->warning;
+# Exclusive ranges typically don't make sense here IMO - force inclusivity
+$critical = '@' . $critical if $critical && $critical !~ m'^@';
+$warning  = '@' . $warning  if $warning  && $warning  !~ m'^@';
+my $status = $np->check_threshold(
+  check     => $count,
+  critical  => $critical,
+  warning   => $warning,
+);
 $np->nagios_exit($status, "${name}query returned $count rows");
 
-
-# arch-tag: 9031f039-b394-4e28-849e-0c28c815dea0
 # vim:ft=perl:ai:sw=4
