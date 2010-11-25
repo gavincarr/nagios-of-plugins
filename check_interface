@@ -1,0 +1,88 @@
+#!/usr/bin/perl -w
+#
+# check_interface - plugin to check the state of a network interface.
+#
+
+use strict;
+use File::Basename;
+use IO::Interface::Simple;
+use Nagios::Plugin 0.1301;
+
+my $np = Nagios::Plugin->new(
+  usage => qq(Usage: %s [--ip <ip>] [--up|--down] [--ptp] <interface>),
+  version => '0.01',
+  url => 'https://github.com/gavincarr/nagios-of-plugins',
+  blurb => qq(This plugin checks the state of a network interface.),
+);
+
+$np->add_arg(
+  spec => "ipaddr|ip|i=s",
+  help => q(-i, --ip, --ipaddr=IPADDR
+   IP address that should be attached to this interface.));
+$np->add_arg(
+  spec => "up|U",
+  help => q{-U, --up
+   Assert that interface is up (checked by default, unless --down specified).});
+$np->add_arg(
+  spec => "down|D",
+  help => q(-D, --down
+   Assert that interface is down.));
+$np->add_arg(
+  spec => "ptp|P",
+  help => q(-P, --ptp
+   Assert that interface is a pointtopoint interface.));
+$np->add_arg(
+  spec => "ptp-pingable",
+  help => q(--ptp-pingable
+   Assert that interface is a pointtopoint interface and peer is pingable.));
+
+$np->getopts;
+
+$np->nagios_exit("UNKNOWN", "no interface specified") 
+  if ! @ARGV;
+$np->nagios_exit("UNKNOWN", "multiple interfaces specified") 
+  if @ARGV > 1;
+$np->nagios_exit("UNKNOWN", "cannot specify both --up and --down")
+  if $np->opts->up and $np->opts->down;
+
+# Setup
+my $interface = shift @ARGV;
+my $status = "CRITICAL";
+my $if = IO::Interface::Simple->new($interface)
+  or $np->nagios_exit("UNKNOWN", "invalid interface $interface");
+
+# Check ip
+if ($np->opts->ipaddr) {
+  $np->nagios_exit($status, "interface $interface has NO ip address, not " . $np->opts->ipaddr)
+      if ! $if->address;
+  $np->nagios_exit($status, "interface $interface has address " . $if->address . 
+    ", not " . $np->opts->ipaddr)
+      if $if->address ne $np->opts->ipaddr;
+}
+
+# Check up/down (--up is on by default unless --down is specified)
+if ($np->opts->down) {
+  $np->nagios_exit($status, "interface $interface is UP") if $if->is_running;
+} else {
+  $np->nagios_exit($status, "interface $interface is DOWN") unless $if->is_running;
+}
+
+# Check ptp
+if ($np->opts->ptp || $np->opts->get('ptp-pingable')) {
+  $np->nagios_exit($status, "interface $interface is NOT point-to-point")
+    if ! $if->is_pt2pt;
+}
+
+# Check ptp-pingable
+if ($np->opts->get('ptp-pingable')) {
+  my $dstaddr = $if->dstaddr 
+    or die $np->nagios_exit($status, "interface $interface has no peer address - cannot ping");
+  require Net::Ping;
+  my $p = Net::Ping->new;
+  $p->ping($dstaddr) 
+    or die $np->nagios_exit($status, "interface $interface peer $dstaddr is NOT pingable");
+}
+
+$np->nagios_exit("OK", "interface $interface ok");
+
+# vim:ft=perl
