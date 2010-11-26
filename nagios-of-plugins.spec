@@ -1,6 +1,6 @@
 Summary: Open Fusion nagios plugins
 Name: nagios-of-plugins
-Version: 0.13.2
+Version: 0.13.3
 Release: 1.of
 License: GPL
 Group: Applications/System
@@ -60,8 +60,11 @@ cp check* notify* $RPM_BUILD_ROOT/usr/lib/nagios/plugins
 %doc README
 
 %changelog
+* Fri Nov 26 2010 Gavin Carr <gavin@openfusion.com.au> 0.13.3
+- Add additional options to check_interface (v0.02).
+
 * Thu Nov 25 2010 Gavin Carr <gavin@openfusion.com.au> 0.13.2
-- Add first-pass check_interface plugin (v0.1).
+- Add first-pass check_interface plugin (v0.01).
 
 * Mon Nov 19 2010 Gavin Carr <gavin@openfusion.com.au> 0.13.1
 - Fix bugs in check_db_query_rowcount range checking (v0.6).
