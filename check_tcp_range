@@ -19,7 +19,7 @@ sub check_tcp { eval { IO::Socket::INET->new(join ':', @_) } }
 my $ng = Nagios::Plugin::Getopt->new(
   usage => qq(Usage: %s -H <hostname> -p <ports> [-v]\n),
   version => '0.2',
-  url => 'http://www.openfusion.com.au/labs/nagios/',
+  url => 'https://github.com/gavincarr/nagios-of-plugins',
   blurb => qq(This plugin tests arbitrary ranges/sets of tcp ports for a host.),
 );
 $ng->arg(
@@ -68,6 +68,5 @@ my $code = check_messages(
 );  
 nagios_exit($code, $message);
 
-
-# arch-tag: 39277909-f754-4ede-99a6-d128d16dc07c
 # vim:ft=perl:ai:sw=2
+

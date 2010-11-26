@@ -13,7 +13,7 @@ use Nagios::Plugin 0.1301;
 my $ng = Nagios::Plugin::Getopt->new(
   usage => q(Usage: %s [-e] [-v]),
   version => '0.03',
-  url => 'http://www.openfusion.com.au/labs/nagios/',
+  url => 'https://github.com/gavincarr/nagios-of-plugins',
   blurb => q(This plugin checks the status of linux mdstat raid partitions.),
 );
 $ng->arg("errors-only|e", 
@@ -126,5 +126,4 @@ $results ||= sprintf "%s raid device%s found, all OK",
 my $code = $np->check_messages(critical => \@crit, warning => \@warn);
 $np->nagios_exit($code, $results);
 
-# arch-tag: 1956e645-1026-4fda-a953-dfea5dbf1ae1
 # vim:ft=perl:ai:sw=4

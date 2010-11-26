@@ -27,7 +27,7 @@ sub getopts_constructor_args
   return (
     usage => qq(Usage: %s [-t timeout] [-v]\n),
     version => $version,
-    url => 'http://www.openfusion.com.au/labs/nagios/',
+    url   => 'https://github.com/gavincarr/nagios-of-plugins',
     blurb => qq(This plugin checks for available yum package updates using dbus and yum-updatesd.),
     extra => qq/
 $self->{plugin} checks for yum updates using dbus and yum-updatesd. This is 

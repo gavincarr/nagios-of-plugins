@@ -12,7 +12,7 @@ use Nagios::Plugin 0.1301;
 my $ng = Nagios::Plugin::Getopt->new(
   usage => qq(Usage: %s [--pkg <pkgmgr>] [-v]),
   version => '0.05',
-  url => 'http://www.openfusion.com.au/labs/nagios/',
+  url => 'https://github.com/gavincarr/nagios-of-plugins',
   blurb => qq(This plugin checks whether a newer linux kernel package is available.),
 );
 $ng->arg(
@@ -101,5 +101,4 @@ else {
   $np->nagios_exit(OK, $results);
 }
 
-# arch-tag: a1cd19f6-dc75-4cec-9508-c16313e20e4b
 # vim:ft=perl:ai:sw=4

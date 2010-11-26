@@ -48,7 +48,7 @@ my $np = Nagios::Plugin->new(
   usage         => "Usage: %s [-s <shelf>] -i <interface> -k <check>\n" .
                    "  where <check> is one of: raid | disks\n",
   version       => '0.1',
-  url           => 'http://www.openfusion.com.au/labs/nagios/',
+  url           => 'https://github.com/gavincarr/nagios-of-plugins',
   blurb         => q{This plugin runs checks on a Coraid AoE disk array using Coraid's cec utility
 (which is expected to be in your path).},
 );

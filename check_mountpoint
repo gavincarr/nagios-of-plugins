@@ -12,7 +12,7 @@ use File::Mountpoint qw(is_mountpoint);
 my $np = Nagios::Plugin->new(
   usage => q(Usage: %s [-v] [--missing-ok] -m <mountpoint> <path1> [<path2> ...]),
   version => '0.01',
-  url => 'http://www.openfusion.com.au/labs/nagios/',
+  url => 'https://github.com/gavincarr/nagios-of-plugins',
   blurb => q(This plugin checks the mountpoint of a given file/directory.),
 );
 

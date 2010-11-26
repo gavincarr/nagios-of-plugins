@@ -16,7 +16,7 @@ use Nagios::Plugin 0.16;
 my $ng = Nagios::Plugin::Getopt->new(
   usage => qq(Usage: %s [-v] <regex>),
   version => '0.3',
-  url => 'http://www.openfusion.com.au/labs/nagios/',
+  url => 'https://github.com/gavincarr/nagios-of-plugins',
   blurb => qq(This plugin acts like an egrep for nagios, reading from stdin until EOF, 
 returning OK if the given regex is found, and CRITICAL otherwise.),
 );
@@ -91,6 +91,5 @@ else {
   $np->nagios_exit($ng->invert ? OK : CRITICAL, $msg);
 }
 
-#arch-tag: 75170fd6-c360-4082-a6f2-b5bcb763b244
 #vim:ft=perl:ai:sw=4
 

@@ -14,7 +14,7 @@ my $np = Nagios::Plugin->new(
   usage =>  qq(Usage: %s [-v] -q <query> [-w <warn-count>] [-c <crit-count>]
                                  [-d <dsn>] [-u <user>] [-p <pass>]\n),
   version => '0.06',
-  url => 'http://www.openfusion.com.au/labs/nagios/',
+  url => 'https://github.com/gavincarr/nagios-of-plugins',
   blurb => 'Plugin to run an arbitrary query against a db and test no. of rows returned.',
   extra => qq(Warning and critical rowcount ranges may be either single numbers or ranges.
 

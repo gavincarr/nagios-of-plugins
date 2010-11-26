@@ -16,7 +16,7 @@ my $ng = Nagios::Plugin::Getopt->new(
   usage => qq(Usage: %s -w count -c count [-W pre_count] [-C pre_count]
     [-q /path/to/qmail-qstat]\n),
   version => '0.01',
-  url => 'http://www.openfusion.com.au/labs/nagios/',
+  url => 'https://github.com/gavincarr/nagios-of-plugins',
   blurb => qq(This plugin checks the length of the qmail mail queue.),
   extra => qq(
 Note that this plugin should either run as root (e.g. using sudo), or you 
@@ -100,5 +100,4 @@ $np->nagios_exit(
 );
 
 
-# arch-tag: ccb70943-0ea1-4af4-b344-a83dcce0c9e4
 # vim:ft=perl:sw=2

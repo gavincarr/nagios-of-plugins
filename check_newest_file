@@ -25,7 +25,7 @@ sub getopts {
   usage => q(Usage: %s -d /path/to/directory [-f <fileglob>] [-m <mtime>] [-s <size>] [-c <count>]
          [-r <regex>] [-e <error-regex>] [-i] [-t timeout] [-v] [--warn-on <CONDITIONS>]),
   version => '0.04',
-  url => 'http://www.openfusion.com.au/labs/nagios/',
+  url => 'https://github.com/gavincarr/nagios-of-plugins',
   blurb => q(This plugin checks various constraints on the newest file in one or more directories.),
   extra => qq(Implemented as a wrapper around check_file, so see that plugin for details.),
   );

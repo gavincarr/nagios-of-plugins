@@ -15,7 +15,7 @@ use Nagios::Plugin::Functions 0.1301;
 my $ng = Nagios::Plugin::Getopt->new(
   usage => q(Usage: %s -s <service> [-c <crit_secs>] [-w <warn_secs>] [-v]),
   version => '0.02',
-  url => 'http://www.openfusion.com.au/labs/nagios/',
+  url => 'https://github.com/gavincarr/nagios-of-plugins',
   blurb => q(This plugin checks the state of a local daemontools service.),
 );
 
@@ -97,5 +97,4 @@ else {
   nagios_exit(UNKNOWN, "error parsing svstat output '$stat'");
 }
 
-# arch-tag: e8068421-ab99-43a2-928e-6fb0bc865b4e
 # vim:ft=perl:ai:sw=2

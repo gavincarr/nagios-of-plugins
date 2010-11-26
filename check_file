@@ -31,7 +31,7 @@ sub getopts {
          [-r <regex>] [-e <error-regex>] [--warn-on <CONDITIONS>] 
          [-f] /path/to/file [/path/to/file2 ...]),
   version => '0.06',
-  url => 'http://www.openfusion.com.au/labs/nagios/',
+  url => 'https://github.com/gavincarr/nagios-of-plugins',
   blurb => q(This plugin checks various constraints on a given file.),
   extra => qq(
 MTIME and SIZE may be specified using common units e.g. 30s, 30m, 30h, 30d

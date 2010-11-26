@@ -13,7 +13,7 @@ my $ng = Nagios::Plugin::Getopt->new(
   usage => qq(Usage: %s -w limit -c limit [-p path | [-x device] [-X type]]
                  [-t timeout] [-l] [-u] [-v]),
   version => '0.04',
-  url => 'http://www.openfusion.com.au/labs/nagios/',
+  url => 'https://github.com/gavincarr/nagios-of-plugins',
   blurb => qq(This plugin checks inode usage on mounted partitions.),
 );
 
@@ -169,5 +169,4 @@ my ($code, $message) = $np->check_messages('join' => $delim, @join_all);
 my $state = $ng->get('report-usage') ? 'used' : 'free';
 $np->nagios_exit($code, "inodes $state: $message");
 
-# arch-tag: 30fdd013-3ef1-4c12-a35b-849e83e125fd
 # vim:ft=perl

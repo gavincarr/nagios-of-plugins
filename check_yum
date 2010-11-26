@@ -33,7 +33,7 @@ sub getopts_constructor_args
                  [-c critical-pkgs] [-C critical-repos]
                  [-x exclude-pkgs] [-X exclude-repos]\n),
     version => '0.05',
-    url => 'http://www.openfusion.com.au/labs/nagios/',
+    url   => 'https://github.com/gavincarr/nagios-of-plugins',
     blurb => qq(This plugin checks for outstanding package updates via yum or up2date.),
     extra => qq/
 Package lists (-w, -c, -x etc.) take precedence over repository lists

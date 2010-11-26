@@ -13,7 +13,7 @@ use Nagios::Plugin::Functions 0.16 qw(convert);
 my $np = Nagios::Plugin->new(
   usage => q(Usage: %s [--free|--used] -w <warn_threshold> -c <crit_threshold>),
   version => '0.01',
-  url => 'http://www.openfusion.com.au/labs/nagios/',
+  url => 'https://github.com/gavincarr/nagios-of-plugins',
   blurb => q(This plugin checks memory utilisation on the local machine.),
 );
 

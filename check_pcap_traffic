@@ -15,7 +15,7 @@ use Net::Pcap qw(:functions);
 my $np = Nagios::Plugin->new(
   usage => qq(Usage: %s [-v] [-i <interface>] [--timeout <secs>] <pcap_filter>\n),
   version => '0.1',
-  url => 'http://www.openfusion.com.au/labs/nagios/',
+  url => 'https://github.com/gavincarr/nagios-of-plugins',
   blurb => qq/This plugin tests for arbitrary interface traffic using pcap./,
   extra => qq/\nTypically requires root (or sudo) privileges./,
 );
