@@ -9,16 +9,13 @@ use IO::Interface::Simple;
 use Nagios::Plugin 0.1301;
 
 my $np = Nagios::Plugin->new(
-  usage => qq(Usage: %s [--ip <ip>] [--up|--down] [--ptp] <interface>),
+  usage => qq(Usage: %s [--up|--down] [--ip <ipaddr>] [--netmask <mask>] [--mtu <mtu>]
+                        [--hwaddr <hwaddr>] [--ptp] [--ptp-pingable] <interface>),
   version => '0.01',
   url => 'https://github.com/gavincarr/nagios-of-plugins',
   blurb => qq(This plugin checks the state of a network interface.),
 );
 
-$np->add_arg(
-  spec => "ipaddr|ip|i=s",
-  help => q(-i, --ip, --ipaddr=IPADDR
-   IP address that should be attached to this interface.));
 $np->add_arg(
   spec => "up|U",
   help => q{-U, --up
@@ -27,6 +24,22 @@ $np->add_arg(
   spec => "down|D",
   help => q(-D, --down
    Assert that interface is down.));
+$np->add_arg(
+  spec => "ipaddr|ip|i=s",
+  help => q(-i, --ip, --ipaddr=IPADDR
+   IP address that should be assigned to this interface.));
+$np->add_arg(
+  spec => "netmask=s",
+  help => q(--netmask=NETMASK
+   Netmask that should apply to this interface.));
+$np->add_arg(
+  spec => "mtu=s",
+  help => q(--mtu=MTU
+   MTU that should apply to this interface.));
+$np->add_arg(
+  spec => "hwaddr=s",
+  help => q(--hwaddr=HWADDR
+   Hardware/MAC address that should be attached to this interface.));
 $np->add_arg(
   spec => "ptp|P",
   help => q(-P, --ptp
@@ -51,6 +64,13 @@ my $status = "CRITICAL";
 my $if = IO::Interface::Simple->new($interface)
   or $np->nagios_exit("UNKNOWN", "invalid interface $interface");
 
+# Check up/down (--up is on by default unless --down is specified)
+if ($np->opts->down) {
+  $np->nagios_exit($status, "interface $interface is UP") if $if->is_running;
+} else {
+  $np->nagios_exit($status, "interface $interface is DOWN") unless $if->is_running;
+}
+
 # Check ip
 if ($np->opts->ipaddr) {
   $np->nagios_exit($status, "interface $interface has NO ip address, not " . $np->opts->ipaddr)
@@ -60,11 +80,31 @@ if ($np->opts->ipaddr) {
       if $if->address ne $np->opts->ipaddr;
 }
 
-# Check up/down (--up is on by default unless --down is specified)
-if ($np->opts->down) {
-  $np->nagios_exit($status, "interface $interface is UP") if $if->is_running;
-} else {
-  $np->nagios_exit($status, "interface $interface is DOWN") unless $if->is_running;
+# Check netmask
+if ($np->opts->netmask) {
+  $np->nagios_exit($status, "interface $interface has NO netmask, not " . $np->opts->netmask)
+      if ! $if->netmask;
+  $np->nagios_exit($status, "interface $interface has netmask " . $if->netmask . 
+    ", not " . $np->opts->netmask)
+      if $if->netmask ne $np->opts->netmask;
+}
+
+# Check MTU
+if ($np->opts->mtu) {
+  $np->nagios_exit($status, "interface $interface has NO mtu, not " . $np->opts->mtu)
+      if ! $if->mtu;
+  $np->nagios_exit($status, "interface $interface has mtu " . $if->mtu . 
+    ", not " . $np->opts->mtu)
+      if $if->mtu ne $np->opts->mtu;
+}
+
+# Check hwaddr
+if ($np->opts->hwaddr) {
+  $np->nagios_exit($status, "interface $interface has NO hardware/mac address, not " . $np->opts->hwaddr)
+      if ! $if->hwaddr;
+  $np->nagios_exit($status, "interface $interface has hardware/mac address " . $if->hwaddr . 
+    ", not " . $np->opts->hwaddr)
+      if $if->hwaddr ne $np->opts->hwaddr;
 }
 
 # Check ptp
