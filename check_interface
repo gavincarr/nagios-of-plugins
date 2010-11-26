@@ -11,7 +11,7 @@ use Nagios::Plugin 0.1301;
 my $np = Nagios::Plugin->new(
   usage => qq(Usage: %s [--up|--down] [--ip <ipaddr>] [--netmask <mask>] [--mtu <mtu>]
                         [--hwaddr <hwaddr>] [--ptp] [--ptp-pingable] <interface>),
-  version => '0.01',
+  version => '0.02',
   url => 'https://github.com/gavincarr/nagios-of-plugins',
   blurb => qq(This plugin checks the state of a network interface.),
 );
