@@ -1,6 +1,6 @@
 Summary: Open Fusion nagios plugins
 Name: nagios-of-plugins
-Version: 0.13.3
+Version: 0.13.4
 Release: 1.of
 License: GPL
 Group: Applications/System
@@ -60,6 +60,9 @@ cp check* notify* $RPM_BUILD_ROOT/usr/lib/nagios/plugins
 %doc README
 
 %changelog
+* Wed Feb 09 2011 Gavin Carr <gavin@openfusion.com.au> 0.13.4
+- Add a --type option to check_ipmi_sdr (v0.02).
+
 * Fri Nov 26 2010 Gavin Carr <gavin@openfusion.com.au> 0.13.3
 - Add additional options to check_interface (v0.02).
 
