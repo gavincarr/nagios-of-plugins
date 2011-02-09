@@ -9,7 +9,7 @@ use Nagios::Plugin 0.16;
 
 my $np = Nagios::Plugin->new(
   usage => q(Usage: %s [-a] -s <sensor> -w <warn_threshold> -c <crit_threshold>),
-  version => '0.01',
+  version => '0.02',
   url => 'https://github.com/gavincarr/nagios-of-plugins',
   blurb => q(This plugin checks the value of arbitrary numeric 'ipmitool sdr' sensors.),
 );
@@ -17,6 +17,10 @@ $np->add_arg(
   spec => "sensor|s=s",
   help => q(Sensor name to check),
   required => 1,
+);
+$np->add_arg(
+  spec => "type|T=s",
+  help => q(Sensor type to limit checks to),
 );
 $np->add_arg(
   spec => "warning|w=s",
@@ -43,14 +47,27 @@ if ($ENV{NP_CHECK_IPMI_SDR_TEST_FILE}) {
   require File::Slurp;
   $output = File::Slurp::read_file($ENV{NP_CHECK_IPMI_SDR_TEST_FILE});
 }
-$output ||= qx(ipmitool sdr list);
+if (! $output) {
+  if (my $type = $opts->type) {
+    $output = qx(ipmitool sdr type '$type');
+  }
+  else {
+    $output = qx(ipmitool sdr list);
+  }
+}
 $np->nagios_die("'ipmitool sdr list' returned no data")
   unless $output;
 chomp $output;
 my ($sensor, $value, $value_numeric, $status, $found);
 my @value = ();
 for (split /\r?\n/, $output) {
-  my ($s, $v, $st) = split /\s+\|\s+/, $_;
+  my ($s, $v, $st, $hex_id, $ent_id);
+  if ($opts->type) {
+    ($s, $hex_id, $st, $ent_id, $v) = split /\s+\|\s*/, $_;
+  }
+  else {
+    ($s, $v, $st) = split /\s+\|\s*/, $_;
+  }
   if (uc $s eq uc $opts->sensor) {
     next if $v =~ m/^(Not Readable)$/i;
     $found = 1;
