@@ -24,6 +24,8 @@ my %check = (
     'list -l' => sub {
       my ($np, $data) = @_;
       $np->nagios_die( "'raid' check returned no data" ) unless $data;
+
+      my $found = 0;
       while ($data =~ m/^ \s+ ( (\S+) \s+ (\S+) \s+ (raid\w+) \s+ ([\w,]+) ) \s* $/msgx) {
         my ($line, $lun, $size, $raid, $state) = ($1, $2, $3, $4, $5);
         $line =~ s/\s\s+/ /g;
@@ -31,7 +33,9 @@ my %check = (
                      $state eq 'normal'            ? OK :
                                                      WARNING;
         $np->add_message( $result, "LUN $line" );
+        $found++;
       }
+      $np->nagios_exit( UNKNOWN, "no raid output found" ) if $found == 0;
     }
   ],
   spares        => [
@@ -89,7 +93,7 @@ $np->add_arg(
 
 $np->getopts;
 my $shelf       = $np->opts->shelf;
-my $int         = $np->opts->interface;
+my $interface   = $np->opts->interface;
 my $checklist   = $np->opts->check;
 foreach (@$checklist) {
   $np->die("Invalid check '$_'") unless $check{$_};
@@ -98,29 +102,23 @@ foreach (@$checklist) {
 alarm $np->opts->timeout;
 my $exp = Expect->new;
 $exp->raw_pty(1);
-$exp->log_stdout(0);
-$exp->spawn('cec', '-s', $shelf, $int);
+$exp->log_stdout($np->opts->verbose);
+$exp->spawn('cec', '-s', $shelf, $interface);
 
-$exp->expect($cmd_timeout,
-  "Probing for shelves ... shelf $shelf found.\n",
-  "connecting ... done.\n",
-  "Escape is Ctrl-\\\n",
-);
-$exp->send("\n");
-$exp->expect($cmd_timeout, "\n\n", "SR shelf $shelf> ");
+$exp->expect($cmd_timeout, -re => "Escape is");
 
 for my $checktype (@$checklist) {
   my ($cmd, $sub) = @{ $check{$checktype} };
-  $exp->send_slow(.1, "$cmd\n");
+  $exp->send("$cmd\n");
   my ($pos, $error, $match, $data) = $exp->expect(undef, -re => "SRX? shelf $shelf> ");
   $np->die($error) if $error;
   $sub->($np, $data);
 }
 
 # Exit
-$exp->send_slow(.1, "");
+$exp->send("");
 $exp->expect($cmd_timeout, ">>> ");
-$exp->send_slow(.1, "q\n");
+$exp->send("q\n");
 $exp->expect($cmd_timeout, 'EOF');
 
 $exp->soft_close;
