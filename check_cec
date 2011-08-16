@@ -46,7 +46,8 @@ my %check = (
 
       # Return ok if #spares > 0
       if (@data) {
-        $np->add_message( OK, map { s/\W+$//; $_ } @data );
+        $np->add_message( OK, scalar(@data) . " spares found: " .
+          join(',', map { s/\W+$//; $_ } @data) );
       }
       else {
         $np->add_message( CRITICAL, "No spares found" );
