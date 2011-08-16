@@ -13,16 +13,11 @@ use Expect;
 
 # %check is a map defining checks as a command to run, and a sub to run on the command output
 my %check = (
+  # 'disks' check now deprecated, since up/down info no longer available there
   disks         => [ 
-    'disks' => sub {
+    'show -l' => sub {
       my ($np, $data) = @_;
-      $np->nagios_die( "'disk' check returned no data" ) unless $data;
-      while ($data =~ m/^ ( (\S+) \s+ (\S+) \s+ (\w+) ) \s* $/msgx) {
-        my ($line, $disk, $size, $state) = ($1, $2, $3, $4);
-        $line =~ s/\s\s+/ /g;
-        my $result = $state eq 'up' ? OK : CRITICAL;
-        $np->add_message( $result, "disk $line" );
-      }
+      $np->nagios_exit( UNKNOWN, "'disks' check no longer supported" );
     }
   ],
   raid          => [ 
@@ -39,6 +34,25 @@ my %check = (
       }
     }
   ],
+  spares        => [
+    'spare' => sub {
+      my ($np, $data) = @_;
+      chomp $data;
+
+      # Remove stuff up to and including command
+      my @data = split /\n/, $data;
+      shift @data while @data and $data[0] !~ m/^spare/;
+      shift @data while @data and $data[0] =~ m/^spare/;
+
+      # Return ok if #spares > 0
+      if (@data) {
+        $np->add_message( OK, map { s/\W+$//; $_ } @data );
+      }
+      else {
+        $np->add_message( CRITICAL, "No spares found" );
+      }
+    },
+  ],
 );
 my $checks = join ' | ', sort keys %check;
 
@@ -46,7 +60,7 @@ my $cmd_timeout = 2;
 
 my $np = Nagios::Plugin->new(
   usage         => "Usage: %s [-s <shelf>] -i <interface> -k <check>\n" .
-                   "  where <check> is one of: raid | disks\n",
+                   "  where <check> is one of: raid | spares\n",
   version       => '0.2',
   url           => 'https://github.com/gavincarr/nagios-of-plugins',
   blurb         => q{This plugin runs checks on a Coraid AoE disk array using Coraid's cec utility
@@ -68,7 +82,7 @@ $np->add_arg(
 $np->add_arg(
   spec          => 'check|k=s@',
   help          => "-k, --check=[ $checks ]
-   Check to run via cec, valid values: 'raid' | 'disks' (may repeat)",
+   Check to run via cec, valid values: 'raid' | 'spares' (may repeat)",
   required      => 1,
 );
 
@@ -116,7 +130,6 @@ __END__
 
 =todo 
 
-- add spare checking (# of spares)
 - add volume offline checking (# online)
 - add disk checking (# of disks up)
 - add --slot support
