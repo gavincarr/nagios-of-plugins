@@ -14,7 +14,7 @@ use Expect;
 # %check is a map defining checks as a command to run, and a sub to run on the command output
 my %check = (
   disks         => [ 
-    'show -l' => sub {
+    'disks' => sub {
       my ($np, $data) = @_;
       $np->nagios_die( "'disk' check returned no data" ) unless $data;
       while ($data =~ m/^ ( (\S+) \s+ (\S+) \s+ (\w+) ) \s* $/msgx) {
@@ -47,7 +47,7 @@ my $cmd_timeout = 2;
 my $np = Nagios::Plugin->new(
   usage         => "Usage: %s [-s <shelf>] -i <interface> -k <check>\n" .
                    "  where <check> is one of: raid | disks\n",
-  version       => '0.1',
+  version       => '0.2',
   url           => 'https://github.com/gavincarr/nagios-of-plugins',
   blurb         => q{This plugin runs checks on a Coraid AoE disk array using Coraid's cec utility
 (which is expected to be in your path).},
@@ -97,7 +97,7 @@ $exp->expect($cmd_timeout, "\n\n", "SR shelf $shelf> ");
 for my $checktype (@$checklist) {
   my ($cmd, $sub) = @{ $check{$checktype} };
   $exp->send_slow(.1, "$cmd\n");
-  my ($pos, $error, $match, $data) = $exp->expect(undef, -re => "SR shelf $shelf> ");
+  my ($pos, $error, $match, $data) = $exp->expect(undef, -re => "SRX? shelf $shelf> ");
   $np->die($error) if $error;
   $sub->($np, $data);
 }
