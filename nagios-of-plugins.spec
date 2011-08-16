@@ -1,6 +1,6 @@
 Summary: Open Fusion nagios plugins
 Name: nagios-of-plugins
-Version: 0.13.5
+Version: 0.13.6
 Release: 1.of%{?dist}
 License: GPL
 Group: Applications/System
@@ -60,8 +60,11 @@ cp check* notify* $RPM_BUILD_ROOT/usr/lib/nagios/plugins
 %doc README
 
 %changelog
+* Tue Aug 16 2011 Gavin Carr <gavin@openfusion.com.au> 0.13.6-1
+- Deprecate check_cec 'disks' check, add 'spares' check.
+
 * Tue Aug 16 2011 Gavin Carr <gavin@openfusion.com.au> 0.13.5-1
-- Update to version 0.13.5.
+- Tweak check_cec to work with newer coraid shelves.
 
 * Wed Feb 09 2011 Gavin Carr <gavin@openfusion.com.au> 0.13.4
 - Add a --type option to check_ipmi_sdr (v0.02).
