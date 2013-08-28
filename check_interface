@@ -1,128 +1,317 @@
-#!/usr/bin/perl -w
-#
-# check_interface - plugin to check the state of a network interface.
-#
+#!/usr/bin/perl
 
+#Copyright (C)  Chris Callegari mazzystr@gmail.com
+#https://github.com/mazzystr/check_iscsi
+#
+#This program is free software; you can redistribute it and/or
+#modify it under the terms of the GNU General Public License
+#as published by the Free Software Foundation; either version 2
+#of the License, or (at your option) any later version.
+#
+#This program is distributed in the hope that it will be useful,
+#but WITHOUT ANY WARRANTY; without even the implied warranty of
+#MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#GNU General Public License for more details.
+#
+#You should have received a copy of the GNU General Public License
+#along with this program; if not, write to the Free Software
+#Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+
+#Inialize modules
 use strict;
-use File::Basename;
-use IO::Interface::Simple;
-use Nagios::Plugin 0.1301;
+use warnings;
+use Data::Dumper;
+use Getopt::Long;
 
-my $np = Nagios::Plugin->new(
-  usage => qq(Usage: %s [--up|--down] [--ip <ipaddr>] [--netmask <mask>] [--mtu <mtu>]
-                        [--hwaddr <hwaddr>] [--ptp] [--ptp-pingable] <interface>),
-  version => '0.02',
-  url => 'https://github.com/gavincarr/nagios-of-plugins',
-  blurb => qq(This plugin checks the state of a network interface.),
-);
+#Initialize variables
+my (%IFACE, %SESSION, @IFACE_DATA, @SESSION_DATA, $IFACE_CMD, @val, %opts, @int,
+    $avail_options, $val, $val_tmp, $offl, $mtu, $vlan, $sessions, $message,
+    $STATE_OK, $STATE_WARN, $STATE_CRIT, $FILE, $STATE_UNKNOWN, $key, $int,
+    $state, $i, $j, $k, @k);
 
-$np->add_arg(
-  spec => "up|U",
-  help => q{-U, --up
-   Assert that interface is up (checked by default, unless --down specified).});
-$np->add_arg(
-  spec => "down|D",
-  help => q(-D, --down
-   Assert that interface is down.));
-$np->add_arg(
-  spec => "ipaddr|ip|i=s",
-  help => q(-i, --ip, --ipaddr=IPADDR
-   IP address that should be assigned to this interface.));
-$np->add_arg(
-  spec => "netmask=s",
-  help => q(--netmask=NETMASK
-   Netmask that should apply to this interface.));
-$np->add_arg(
-  spec => "mtu=s",
-  help => q(--mtu=MTU
-   MTU that should apply to this interface.));
-$np->add_arg(
-  spec => "hwaddr=s",
-  help => q(--hwaddr=HWADDR
-   Hardware/MAC address that should be attached to this interface.));
-$np->add_arg(
-  spec => "ptp|P",
-  help => q(-P, --ptp
-   Assert that interface is a pointtopoint interface.));
-$np->add_arg(
-  spec => "ptp-pingable",
-  help => q(--ptp-pingable
-   Assert that interface is a pointtopoint interface and peer is pingable.));
+#Set globals
+use vars qw/ %opt /;
+$STATE_OK = $state = 0;
+$STATE_WARN=1;
+$STATE_CRIT=2;
+$STATE_UNKNOWN=3;
 
-$np->getopts;
+#Catch all usage output
+sub usage {
+  print STDERR << "EOF";
+Usage: $0 [--offload (y|yes|n|no)] [--mtu (1500|9000)]
+  [--vlan (1-4049) [--sessions [0-9]+] [ -? | -h | --help ]
 
-$np->nagios_exit("UNKNOWN", "no interface specified") 
-  if ! @ARGV;
-$np->nagios_exit("UNKNOWN", "multiple interfaces specified") 
-  if @ARGV > 1;
-$np->nagios_exit("UNKNOWN", "cannot specify both --up and --down")
-  if $np->opts->up and $np->opts->down;
+Available options:
+  --offload   hardware iSCSI offload, yes|no
+                query \"iscsiadm -m iface -P1\" and parse
 
-# Setup
-my $interface = shift @ARGV;
-my $status = "CRITICAL";
-my $if = IO::Interface::Simple->new($interface)
-  or $np->nagios_exit("UNKNOWN", "invalid interface $interface");
+  --mtu       mtu size for iSCSI interfaces, 1500|9000
+                if offload=n, query \"ip addr\" and parse mtu
+                if offload=y, query \"iscsiadm -m iface -I \$I | grep iface.mtu\"
 
-# Check up/down (--up is on by default unless --down is specified)
-if ($np->opts->down) {
-  $np->nagios_exit($status, "interface $interface is UP") if $if->is_running;
+  --vlan      vlan id, 1-4094 (IEEE 802.1Q standard)
+                if offload=n,
+                  query \"iscsiadm -m host\" -> obtain IP of initiator
+                 \"ip addr | grep IP\" -> obtain interface name
+                 \"cat /sys/class/net/eth#/mtu\" -> obtain mtu value
+                if offload=y, \"iscsiadm -m iface -I \$I -o show | grep vlan_id\"
+
+  --sessions  total number active iSCSI sessions, (0-9)+
+                query \"iscsiadm -m session -r SID -P1\" and parse
+
+NOTES:
+  This plugin only issues state OK|WARN
+
+  ONLY works for the following interfaces...
+    Standard Linux network interfaces
+    Broadcom Corporation NetXtreme II 10 Gigabit Ethernet
+    Chelsio Communications Inc 10GbE Port Adapters
+    Send me lspci, \"iscsiadm -m iface -P1\", \"iscsiadm -m host\"
+
+  VLAN is experimental.  The code looks like it should work but we don't vlan
+                         tag storage interfaces so I have no a test bed.
+EOF
+  exit 1;
+}
+
+sub init() {
+  if ( scalar(@ARGV) == 0 ) { usage(); }
+  $avail_options = 'offload:mtu:vlan:sessions:h:help';
+  GetOptions(\%opts,
+    "help|h|?",
+    "offload=s"   => \$offl,
+    "mtu=s"       => \$mtu,
+    "vlan=s"      => \$vlan,
+    "sessions=s"  => \$sessions,
+  ) or usage();
+if ($opts{'help'}) { usage(); }
+}
+
+#Evaluate arguements
+init();
+
+#Query iscsiadm host mode
+$IFACE_CMD=`iscsiadm -m iface -P1`;
+@IFACE_DATA=split("\n", $IFACE_CMD);
+foreach $val ( @IFACE_DATA ) {
+  chomp $val;
+  $val =~ s/^(\t)+//g; $val =~ s/: /:/g;
+  if ( $val =~ /^Iface:/ )  {
+    ($key = $val) =~ s/Iface: //g;
+    $key =~ s/Iface://g;
+    $IFACE{$key} = "1";
+    $val_tmp = "1";
+  }
+  if ( $val =~ /Target/ ) { $val_tmp  = ":" . $val; }
+  if ( $val =~ /Portal/ ) { $val_tmp .= "," . $val . ";"; }
+  if (( $val_tmp =~ /Target/ ) && ( $val_tmp =~ /Portal/ )) {
+    $IFACE{$key} = $val_tmp . $IFACE{$key};
+    $IFACE{$key} =~ s/^://g;
+  }
+}
+
+#print Dumper (\%IFACE);
+
+#Query iscsiadm sessions
+opendir(DIR, "/sys/class/iscsi_session");
+while( @val=readdir(DIR) ) {
+  foreach (@val) {
+    if ( /session/ ) {
+      s/^session//;
+      open(A, "iscsiadm -m session -r $_ -P1 |");
+      @SESSION_DATA = <A>;
+      foreach $val ( @SESSION_DATA ) {
+        chomp $val;
+        $val =~ s/^(\t)+//g;
+          if ( $val =~ /^Target:/ )  {
+            $val =~ s/^Target: //g;
+            $key = $val;
+            $SESSION{$key} = "1";
+            $val_tmp = "1";
+          }
+          $val =~ s/: /:/g; $val =~ s/ /_/g;
+          if ( $val =~ /^Iface_Name/ )         { $val_tmp  = $val; }
+          if ( $val =~ /^Iface_Transport/ )    { $val_tmp .= " " . $val; }
+          if ( $val =~ /^SID/ )                { $val_tmp .= " " . $val; }
+          if ( $val =~ /^iSCSI_Session_State/ ) { $val_tmp .= " " . $val; }
+        $SESSION{$key} = $val_tmp;
+        $SESSION{$key} =~ s/^://g;
+      }
+      close A;
+    }
+  }
+}
+close DIR;
+
+#print Dumper (\%SESSION);
+
+# STATE - iSCSI offload conditional
+if ($offl) {
+  foreach $key ( keys %IFACE ) {
+    if ( $IFACE{"$key"} ne "1" ) {
+      open(A, "iscsiadm -m iface -I $key |");
+      while ($val=<A>) {
+        chomp $val;
+        if ( $val =~ /iface.transport_name = tcp/ ) {
+          $j = "no";
+          last;
+        }
+        elsif ( $val =~ /iface.transport_name = (bnx2i|cxgb3i|be2iscsi)/ ) {
+          $j = "yes";
+        }
+      }
+    }
+  }
+  if ( $j !~ /$offl/ ) { $state=1; }
+  $message = "scsi_hardware_offload:$j, ";
+  $offl = $j;
+}
+
+# STATE - network mtu conditional
+if (($mtu) && ( $offl =~ /n/ )) {
+  $i=""; $j="";
+  $IFACE_CMD=`iscsiadm -m host`;
+  @IFACE_DATA=split("\n", $IFACE_CMD);
+  foreach $val ( @IFACE_DATA ) {
+    chomp $val;
+    if ( $val =~ /^tcp: / ) {
+      $val =~ s/^.*\] //g; $val =~ s/,\[.*$//g;
+      $int = `ip addr`;
+      @int = split("\n", $int);
+      foreach $i ( @int) {
+        $i =~ s/^\s+//g;
+        if ( $i =~ /inet $val *.* eth[0-9]+/ ) {
+          @val = split(" ", $i);
+          open(A, "cat /sys/class/net/$val[6]/mtu |");
+          foreach ($k=<A>) {
+            chomp $k;
+            if ( $j !~ /$val[6]/ ) { $j = $j . "$val[6]:" . $k . ","; }
+          }
+          close A;
+        }
+      }
+    }
+  }
+}
+elsif (($mtu) && ( $offl =~ /y|yes/ )) {
+  $i=""; $j="";
+  foreach $key ( %IFACE ) {
+    if (( $key =~ /bnx2i\./ ) && ( $IFACE{$key} !~ /^1$/ )) {
+      open (A, "iscsiadm -m iface -I $key -o show |");
+      while (<A>) {
+        if ( /iface.mtu/ ) {
+          chomp;
+          @val = split(" = ", $_);
+          $i=$val[1];
+        }
+      }
+      foreach ($mtu) {
+        if ( $j !~ /$key/ ) { $j = $j . "$key:" .$i .","; }
+      }
+      close A;
+    }
+  }
+}
+if ($mtu) {
+  $j =~ s/,$//;
+  @val = split(",", $j);
+  foreach (@val) {
+    if (( $state == 0 ) && ( /:$mtu/ )) { $state = 0; }
+    else                                 { $state = 1; }
+  }
+  $message = $message . "mtu:$j ";
+}
+
+# STATE - network vlanid conditional
+if (($vlan) && ( $offl =~ /n|no/ )) {
+  ($i, $j, $k) = "0";
+  $IFACE_CMD=`iscsiadm -m host`;
+  @IFACE_DATA=split("\n", $IFACE_CMD);
+  foreach $val ( @IFACE_DATA ) {
+    chomp $val;
+    if ( $val =~ /^tcp: / ) {
+      $val =~ s/^.*\] //g; $val =~ s/,\[.*$//g;
+      $int = `ip addr`;
+      @int = split("\n", $int);
+      foreach $i ( @int) {
+        $i =~ s/^\s+//g;
+        if ( $i =~ /inet $val *.* eth[0-9]+\.[0-4094]/ ) {
+          @val = split(" ", $i);
+          open(A, "cat /proc/net/vlan/$val[6] |");
+          foreach (<A>) {
+            if ( /VID: [0-4094]/ ) {
+              @k = split(": ", $_);
+              if ( $vlan == $_ ) {
+                if ( $j !~ /$val[6]/ ) { $j = $j . "$val[6]:" . @k . ","; } }
+              else {
+                if ( $j !~ /$val[6]/ ) { $j = $j . "$val[6]:" . @k . ","; } }
+            }
+          }
+          close A;
+        }
+        else {
+          if ( $i =~ /inet $val *.* eth[0-9]+/ ) {
+            @val = split(" ", $i);
+            if ( $j !~ /$val[6]/ ) { $j = $j . "$val[6]:not_tagged,"; } }
+        }
+      }
+    }
+  }
+}
+elsif (($vlan) && ( $offl =~ /y|yes/ )) {
+  $j = "0";
+  foreach $key ( %IFACE ) {
+    if (( $key =~ /bnx2i\./ ) && ( "$IFACE{$key}" eq "1" )) {
+      open (A, "iscsiadm -m iface -I $key -o show |");
+      while (<A>) {
+        if ( /iface\.vlan_id/ ) {
+          chomp;
+          @val = split(" = ", $_);
+          if ( $val[1] == "0" ) {
+            if ( $j !~ /$key/ ) { $j = $j . "$key:not_tagged,"; } }
+          else {
+            if ( $j !~ /$key/ ) { $j = $j . "$key:" .$val[1] .","; } }
+        }
+      }
+      close A;
+    }
+  }
+}
+if ($vlan) {
+  if ( "$i" != "$vlan" ) { $state = 1; }
+$message = $message . "vlanid:$j ";
+}
+
+# STATE - iSCSI sessions conditional
+if ($sessions) {
+  ($i, $j, $k) = "0";
+  foreach ($sessions) {
+    $i = keys %SESSION;
+    $j = $i;
+    if ( $sessions != $i ) { $state = 1; }
+  }
+  $message = $message . "session_count:$j, ";
+}
+
+#OK - iscsi_hardware_offload:yes, mtu:9000, vlan:eth4:9000,eth6:9000, session_count:12
+
+#Clean trailing ,\s
+$message =~ s/, $//g;
+
+#Add trailing | so perfdata and long output can be attached
+$message = $message . " | ";
+
+#FINAL OUTPUT - STATE / MESSAGE / LONG OUTPUT
+if($state == $STATE_OK){
+    $message = "OK - ".$message ."\n";
+} elsif($state == $STATE_WARN){
+    $message = "WARNING - ".$message ."\n";
+} elsif($state == $STATE_CRIT){
+    $message = "CRITICAL - ".$message ."\n";
 } else {
-  $np->nagios_exit($status, "interface $interface is DOWN") unless $if->is_running;
+    $message = "UNKNOWN - ".$message ."\n";
 }
 
-# Check ip
-if ($np->opts->ipaddr) {
-  $np->nagios_exit($status, "interface $interface has NO ip address, not " . $np->opts->ipaddr)
-      if ! $if->address;
-  $np->nagios_exit($status, "interface $interface has address " . $if->address . 
-    ", not " . $np->opts->ipaddr)
-      if $if->address ne $np->opts->ipaddr;
-}
-
-# Check netmask
-if ($np->opts->netmask) {
-  $np->nagios_exit($status, "interface $interface has NO netmask, not " . $np->opts->netmask)
-      if ! $if->netmask;
-  $np->nagios_exit($status, "interface $interface has netmask " . $if->netmask . 
-    ", not " . $np->opts->netmask)
-      if $if->netmask ne $np->opts->netmask;
-}
-
-# Check MTU
-if ($np->opts->mtu) {
-  $np->nagios_exit($status, "interface $interface has NO mtu, not " . $np->opts->mtu)
-      if ! $if->mtu;
-  $np->nagios_exit($status, "interface $interface has mtu " . $if->mtu . 
-    ", not " . $np->opts->mtu)
-      if $if->mtu ne $np->opts->mtu;
-}
-
-# Check hwaddr
-if ($np->opts->hwaddr) {
-  $np->nagios_exit($status, "interface $interface has NO hardware/mac address, not " . $np->opts->hwaddr)
-      if ! $if->hwaddr;
-  $np->nagios_exit($status, "interface $interface has hardware/mac address " . $if->hwaddr . 
-    ", not " . $np->opts->hwaddr)
-      if $if->hwaddr ne $np->opts->hwaddr;
-}
-
-# Check ptp
-if ($np->opts->ptp || $np->opts->get('ptp-pingable')) {
-  $np->nagios_exit($status, "interface $interface is NOT point-to-point")
-    if ! $if->is_pt2pt;
-}
-
-# Check ptp-pingable
-if ($np->opts->get('ptp-pingable')) {
-  my $dstaddr = $if->dstaddr 
-    or die $np->nagios_exit($status, "interface $interface has no peer address - cannot ping");
-  require Net::Ping;
-  my $p = Net::Ping->new;
-  $p->ping($dstaddr) 
-    or die $np->nagios_exit($status, "interface $interface peer $dstaddr is NOT pingable");
-}
-
-$np->nagios_exit("OK", "interface $interface ok");
-
-# vim:ft=perl
+print $message;
+exit $state;
